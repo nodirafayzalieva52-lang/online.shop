@@ -2,9 +2,11 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"shop/internal/service"
+	pkgerr "shop/pkg/errors"
 	"shop/pkg/logger"
 
 	"go.uber.org/zap"
@@ -20,6 +22,29 @@ func NewUserHandler(userService *service.UserService, log *logger.Logger) *UserH
 		userService: userService,
 		logger:      log,
 	}
+}
+
+type RegisterRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type LoginResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+type RefreshRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+type LogoutRequest struct {
+	RefreshToken string `json:"refresh_token"`
 }
 
 type ErrorResponse struct {
@@ -43,8 +68,12 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	err := h.userService.Register(r.Context(), req.Email, req.Password)
 	if err != nil {
-		h.logger.Error("failed to register user", 
-			zap.String("email", req.Email), 
+		if errors.Is(err, pkgerr.ErrUserAlreadyExists) {
+			respondWithError(w, http.StatusConflict, err.Error())
+			return
+		}
+		h.logger.Error("failed to register user",
+			zap.String("email", req.Email),
 			zap.Error(err),
 		)
 		respondWithError(w, http.StatusInternalServerError, "failed to register user")
@@ -52,7 +81,7 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.logger.Info("user registered successfully", zap.String("email", req.Email))
-	w.WriteHeader(http.StatusCreated)
+	respondWithJSON(w, http.StatusCreated, map[string]string{"message": "user registered successfully"})
 }
 
 func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
@@ -70,10 +99,10 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := h.userService.Login(r.Context(), req.Email, req.Password)
+	accessToken, refreshToken, err := h.userService.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
-		h.logger.Warn("failed login attempt", 
-			zap.String("email", req.Email), 
+		h.logger.Warn("failed login attempt",
+			zap.String("email", req.Email),
 			zap.Error(err),
 		)
 		respondWithError(w, http.StatusUnauthorized, "invalid email or password")
@@ -81,8 +110,42 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.logger.Info("user logged in successfully", zap.String("email", req.Email))
-	respondWithJSON(w, http.StatusOK, LoginResponse{Token: token})
+	respondWithJSON(w, http.StatusOK, LoginResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	})
 }
+
+func (h *UserHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	var req RefreshRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RefreshToken == "" {
+		respondWithError(w, http.StatusBadRequest, "refresh_token is required")
+		return
+	}
+
+	accessToken, refreshToken, err := h.userService.RefreshToken(r.Context(), req.RefreshToken)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "invalid or expired refresh token")
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, LoginResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	})
+}
+
+func (h *UserHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	var req LogoutRequest
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	if req.RefreshToken != "" {
+		_ = h.userService.Logout(r.Context(), req.RefreshToken)
+	}
+
+	respondWithJSON(w, http.StatusOK, map[string]string{"message": "logged out successfully"})
+}
+
 func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)

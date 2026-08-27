@@ -2,11 +2,14 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
+	"shop/handler/middleware"
 	"shop/internal/models"
 	"shop/internal/service"
+	pkgerr "shop/pkg/errors"
 	"shop/pkg/logger"
 )
 
@@ -15,72 +18,156 @@ type OrderHandler struct {
 	log          *logger.Logger
 }
 
-func NewOrderHandler(OrderService *service.OrderService, log *logger.Logger) *OrderHandler {
+func NewOrderHandler(orderService *service.OrderService, log *logger.Logger) *OrderHandler {
 	return &OrderHandler{
-		OrderService: OrderService,
-		log: &logger.Logger{},
+		OrderService: orderService,
+		log:          log,
 	}
 }
 
+type OrderItemRequest struct {
+	ProductID int64 `json:"product_id"`
+	Quantity  int   `json:"quantity"`
+}
+
 type CreateOrderRequest struct {
-	UserID     int     `json:"user_id"`
-	ProductID  int     `json:"product_id"`
-	Quantity   int     `json:"quantity"`
-	TotalPrice float64 `json:"total_price"`
+	CustomerID int64              `json:"customer_id"`
+	ProductID  int64              `json:"product_id"`
+	Quantity   int                `json:"quantity"`
+	Items      []OrderItemRequest `json:"items"`
 }
 
 func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	var req CreateOrderRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Некорректный формат JSON", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "invalid request body format")
 		return
 	}
 
-	order := h.OrderService.Create(r.Context(), models.Order{})
+	customerID := req.CustomerID
+	if authID, ok := middleware.GetUserID(r.Context()); ok && authID > 0 {
+		customerID = authID
+	}
+	if customerID <= 0 {
+		respondWithError(w, http.StatusBadRequest, "customer_id is required")
+		return
+	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(order)
+	var items []models.OrderItem
+	if len(req.Items) > 0 {
+		for _, item := range req.Items {
+			items = append(items, models.OrderItem{
+				ProductID: item.ProductID,
+				Quantity:  item.Quantity,
+			})
+		}
+	} else if req.ProductID > 0 && req.Quantity > 0 {
+		items = append(items, models.OrderItem{
+			ProductID: req.ProductID,
+			Quantity:  req.Quantity,
+		})
+	}
+
+	order, err := h.OrderService.Create(r.Context(), customerID, items)
+	if err != nil {
+		if errors.Is(err, pkgerr.ErrInsufficientStock) || errors.Is(err, pkgerr.ErrEmptyOrder) || errors.Is(err, pkgerr.ErrProductNotFound) {
+			respondWithError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respondWithJSON(w, http.StatusCreated, order)
 }
 
 func (h *OrderHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	id, err := strconv.Atoi(idStr)
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		idStr = r.URL.Query().Get("id")
+	}
+
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
-		http.Error(w, "Некорректный ID заказа", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "invalid order id")
 		return
 	}
 
-	order, err := h.OrderService.GetByID(r.Context(), id)
+	userID, _ := middleware.GetUserID(r.Context())
+	userRole, _ := middleware.GetUserRole(r.Context())
+
+	order, err := h.OrderService.GetByID(r.Context(), id, userID, userRole)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		if errors.Is(err, pkgerr.ErrOrderNotFound) {
+			respondWithError(w, http.StatusNotFound, "order not found")
+			return
+		}
+		if errors.Is(err, pkgerr.ErrAccessDenied) {
+			respondWithError(w, http.StatusForbidden, "access denied to this order")
+			return
+		}
+		respondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(order)
+	respondWithJSON(w, http.StatusOK, order)
 }
 
 func (h *OrderHandler) GetUserOrders(w http.ResponseWriter, r *http.Request) {
-	userIDStr := r.URL.Query().Get("user_id")
-	userID, err := strconv.Atoi(userIDStr)
-	if err != nil || userID <= 0 {
-		http.Error(w, "Некорректный параметр user_id", http.StatusBadRequest)
-		return
+	var customerID int64
+	if authID, ok := middleware.GetUserID(r.Context()); ok && authID > 0 {
+		customerID = authID
+	} else {
+		userIDStr := r.URL.Query().Get("user_id")
+		if userIDStr == "" {
+			userIDStr = r.URL.Query().Get("customer_id")
+		}
+		var err error
+		customerID, err = strconv.ParseInt(userIDStr, 10, 64)
+		if err != nil || customerID <= 0 {
+			respondWithError(w, http.StatusBadRequest, "invalid user_id parameter")
+			return
+		}
 	}
 
-	orders, err := h.OrderService.GetUserOrders(r.Context(), userID)
+	orders, err := h.OrderService.GetByCustomerID(r.Context(), customerID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	if orders == nil {
-		orders = []*models.Order{}
+	respondWithJSON(w, http.StatusOK, orders)
+}
+
+func (h *OrderHandler) GetStoreOrders(w http.ResponseWriter, r *http.Request) {
+	storeIDStr := r.PathValue("store_id")
+	if storeIDStr == "" {
+		storeIDStr = r.URL.Query().Get("store_id")
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(orders)
+	storeID, err := strconv.ParseInt(storeIDStr, 10, 64)
+	if err != nil || storeID <= 0 {
+		respondWithError(w, http.StatusBadRequest, "invalid store id")
+		return
+	}
+
+	userID, _ := middleware.GetUserID(r.Context())
+	userRole, _ := middleware.GetUserRole(r.Context())
+
+	orders, err := h.OrderService.GetByStoreID(r.Context(), storeID, userID, userRole)
+	if err != nil {
+		if errors.Is(err, pkgerr.ErrAccessDenied) {
+			respondWithError(w, http.StatusForbidden, "access denied to this store orders")
+			return
+		}
+		if errors.Is(err, pkgerr.ErrStoreNotFound) {
+			respondWithError(w, http.StatusNotFound, "store not found")
+			return
+		}
+		respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, orders)
 }

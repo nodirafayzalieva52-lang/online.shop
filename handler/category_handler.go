@@ -2,18 +2,22 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
-	"shop/internal/service"
 	"strconv"
+
+	"shop/internal/models"
+	"shop/internal/service"
+	pkgerr "shop/pkg/errors"
 )
 
 type CategoryHandler struct {
 	CategoryService *service.CategoryService
 }
 
-func NewCategoryHandler(CategoryService *service.CategoryService) *CategoryHandler {
+func NewCategoryHandler(categoryService *service.CategoryService) *CategoryHandler {
 	return &CategoryHandler{
-		CategoryService: CategoryService,
+		CategoryService: categoryService,
 	}
 }
 
@@ -24,45 +28,54 @@ type CreateCategoryRequest struct {
 func (h *CategoryHandler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	var req CreateCategoryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Incorect JSON", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	category, err := h.CategoryService.CreateCategory(r.Context(), req.Name)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(category)
+	respondWithJSON(w, http.StatusCreated, category)
 }
 
 func (h *CategoryHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	id, err := strconv.Atoi(idStr)
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		idStr = r.URL.Query().Get("id")
+	}
+
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
-		http.Error(w, "INcorect ID", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "invalid category id")
 		return
 	}
 
 	category, err := h.CategoryService.GetByID(r.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		if errors.Is(err, pkgerr.ErrCategoryNotFound) {
+			respondWithError(w, http.StatusNotFound, "category not found")
+			return
+		}
+		respondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(category)
+	respondWithJSON(w, http.StatusOK, category)
 }
 
 func (h *CategoryHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	categories, err := h.CategoryService.GetAll(r.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(categories)
+	if categories == nil {
+		categories = []*models.Category{}
+	}
+
+	respondWithJSON(w, http.StatusOK, categories)
 }

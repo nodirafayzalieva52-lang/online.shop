@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
+
 	"shop/handler"
-	
+	"shop/internal/config"
 	"shop/internal/repository/postgres"
 	"shop/internal/service"
+	"shop/migrations"
+	"shop/pkg/jwt"
 	"shop/pkg/logger"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,68 +22,100 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	pool, err := pgxpool.New(ctx, fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s",
-		"localhost", 5432, "postgres", "20102010", "nd"))
+	cfg, err := config.New("config.env")
 	if err != nil {
-		log.Fatal("Failed to connect top database: ", err)
+		log.Fatalf("failed to load config: %v", err)
+	}
+
+	appLogger, err := logger.New(true)
+	if err != nil {
+		log.Fatalf("failed to init logger: %v", err)
+	}
+
+	ttl, err := time.ParseDuration(cfg.JWT.TTL)
+	if err != nil {
+		log.Fatalf("invalid JWT_TTL: %v", err)
+	}
+
+	jwtService, err := jwt.NewService(cfg.JWT.Secret, ttl)
+	if err != nil {
+		log.Fatalf("failed to init jwt service: %v", err)
+	}
+
+	migratorDSN := fmt.Sprintf(
+		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		cfg.Postgres.User,
+		cfg.Postgres.Password,
+		cfg.Postgres.Host,
+		cfg.Postgres.Port,
+		cfg.Postgres.DBName,
+		cfg.Postgres.SSLMode,
+	)
+
+	// ---------- AUTO MIGRATIONS ----------
+	if err := migrations.Run(migratorDSN); err != nil {
+		log.Printf("Warning: Database auto-migration failed or skipped: %v", err)
+	}
+
+	dsn := fmt.Sprintf(
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		cfg.Postgres.Host,
+		cfg.Postgres.Port,
+		cfg.Postgres.User,
+		cfg.Postgres.Password,
+		cfg.Postgres.DBName,
+		cfg.Postgres.SSLMode,
+	)
+
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		log.Fatalf("failed to connect to database: %v", err)
 	}
 	defer pool.Close()
-	
-	logger, err := logger.New(true)
 
+	// ---------- REFRESH TOKEN & USER ----------
 	userRepo := postgres.NewUserRepository(pool)
-	userService := service.NewUserService(userRepo)
-	userHandler := handler.NewUserHandler(userService, logger)
+	refreshTokenRepo := postgres.NewRefreshTokenRepository(pool)
+	userService := service.NewUserService(userRepo, refreshTokenRepo, jwtService)
+	userHandler := handler.NewUserHandler(userService, appLogger)
 
+	// ---------- STORE ----------
 	storeRepo := postgres.NewStoreRepository(pool)
 	storeService := service.NewStoreService(storeRepo)
 	storeHandler := handler.NewStoreHandler(storeService)
 
+	// ---------- CATEGORY ----------
 	categoryRepo := postgres.NewCategoryRepository(pool)
 	categoryService := service.NewCategoryService(categoryRepo)
 	categoryHandler := handler.NewCategoryHandler(categoryService)
 
+	// ---------- PRODUCT ----------
 	productRepo := postgres.NewProductRepository(pool)
-	productService := service.NewProductService(productRepo)
+	productService := service.NewProductService(productRepo, storeRepo)
 	productHandler := handler.NewProductHandler(productService)
 
-	orderRepo := postgres.NewOrderRepository(pool)
-	orderService := service.NewOrderService(orderRepo)
-	orderHandler := handler.NewOrderHandler(orderService, logger)
-
-	mux := http.NewServeMux()
-
-	// ---------- USER ----------
-	mux.Handle("POST /register", http.HandlerFunc(userHandler.Register))
-	mux.Handle("POST /login", http.HandlerFunc(userHandler.Login))
-
-	// ---------- STORE ----------
-	mux.Handle("POST /store", http.HandlerFunc(storeHandler.CreateStore))
-	mux.Handle("GET /stores/{id}", http.HandlerFunc(storeHandler.GetByID))
-	mux.Handle("GET /stores/seller", http.HandlerFunc(storeHandler.GetBySellerID))
-
-	// ---------- CATEGORY ----------
-	mux.Handle("POST /category", http.HandlerFunc(categoryHandler.CreateCategory))
-	mux.Handle("GET /categories", http.HandlerFunc(categoryHandler.GetAll))
-	mux.Handle("GET /categories/{id}", http.HandlerFunc(categoryHandler.GetByID))
-
-	// ---------- PRODUCT ----------
-	mux.Handle("POST /product", http.HandlerFunc(productHandler.CreateProduct))
-	mux.Handle("GET /product", http.HandlerFunc(productHandler.GetByID))
-	mux.Handle("GET /products/store", http.HandlerFunc(productHandler.GetByStoreID))
-
 	// ---------- ORDER ----------
-	mux.Handle("POST /order", http.HandlerFunc(orderHandler.CreateOrder))
-	mux.Handle("GET /orders", http.HandlerFunc(orderHandler.GetUserOrders))
-	mux.Handle("GET /orders/{id}", http.HandlerFunc(orderHandler.GetByID))
+	orderRepo := postgres.NewOrderRepository(pool)
+	orderService := service.NewOrderService(orderRepo, productRepo, storeRepo)
+	orderHandler := handler.NewOrderHandler(orderService, appLogger)
+
+	router := handler.NewRouter(handler.Deps{
+		JWTService:      jwtService,
+		UserHandler:     userHandler,
+		StoreHandler:    storeHandler,
+		CategoryHandler: categoryHandler,
+		ProductHandler:  productHandler,
+		OrderHandler:    orderHandler,
+	})
 
 	server := &http.Server{
-		Addr:    ":8080",
-		Handler: mux,
+		Addr:    cfg.HTTPPort,
+		Handler: router,
 	}
 
-	log.Println("Server is running on port :8080...")
+	log.Printf("Server is running on %s", cfg.HTTPPort)
+	log.Printf("Swagger UI available at http://localhost%s/swagger/", cfg.HTTPPort)
+
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Server failed to start: %v", err)
 	}
