@@ -28,6 +28,16 @@ type CreateProductRequest struct {
 	Description string  `json:"description"`
 	Price       float64 `json:"price"`
 	Stock       int     `json:"stock"`
+	ImageURL    string  `json:"image_url"`
+}
+
+type UpdateProductRequest struct {
+	CategoryID  int64   `json:"category_id"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Price       float64 `json:"price"`
+	Stock       int     `json:"stock"`
+	ImageURL    string  `json:"image_url"`
 }
 
 func (h *ProductHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
@@ -51,6 +61,7 @@ func (h *ProductHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 		req.Description,
 		req.Price,
 		req.Stock,
+		req.ImageURL,
 	)
 	if err != nil {
 		if errors.Is(err, pkgerr.ErrAccessDenied) {
@@ -122,4 +133,53 @@ func (h *ProductHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondWithJSON(w, http.StatusOK, products)
+}
+
+func (h *ProductHandler) UpdateProduct(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		respondWithError(w, http.StatusBadRequest, "invalid product id")
+		return
+	}
+
+	var req UpdateProductRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "invalid request body format")
+		return
+	}
+
+	userID, _ := middleware.GetUserID(r.Context())
+	userRole, _ := middleware.GetUserRole(r.Context())
+
+	product, err := h.ProductService.UpdateProduct(
+		r.Context(),
+		userID,
+		userRole,
+		id,
+		req.CategoryID,
+		req.Name,
+		req.Description,
+		req.Price,
+		req.Stock,
+		req.ImageURL,
+	)
+	if err != nil {
+		if errors.Is(err, pkgerr.ErrAccessDenied) {
+			respondWithError(w, http.StatusForbidden, "you do not have permission to update this product")
+			return
+		}
+		if errors.Is(err, pkgerr.ErrProductNotFound) {
+			respondWithError(w, http.StatusNotFound, "product not found")
+			return
+		}
+		if errors.Is(err, pkgerr.ErrStoreNotFound) {
+			respondWithError(w, http.StatusNotFound, "store not found")
+			return
+		}
+		respondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, product)
 }

@@ -10,6 +10,7 @@ type UserRepository interface {
 	Create(ctx context.Context, user *models.User) error
 	GetByID(ctx context.Context, id int64) (*models.User, error)
 	GetByEmail(ctx context.Context, email string) (*models.User, error)
+	UpdateRole(ctx context.Context, userID int64, role models.Role) error
 }
 
 type RefreshTokenRepository interface {
@@ -23,6 +24,7 @@ type StoreRepository interface {
 	Create(ctx context.Context, store *models.Store) error
 	GetByID(ctx context.Context, id int64) (*models.Store, error)
 	GetBySellerID(ctx context.Context, sellerID int64) (*models.Store, error)
+	GetAll(ctx context.Context) ([]*models.Store, error)
 }
 
 type CategoryRepository interface {
@@ -36,6 +38,7 @@ type ProductRepository interface {
 	GetByID(ctx context.Context, id int64) (*models.Product, error)
 	GetByStoreID(ctx context.Context, storeID int64) ([]*models.Product, error)
 	GetAll(ctx context.Context) ([]*models.Product, error)
+	Update(ctx context.Context, product *models.Product) error
 	UpdateStock(ctx context.Context, productID int64, delta int) error
 }
 

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"shop/internal/models"
 	"shop/internal/repository"
@@ -23,11 +24,15 @@ func (s *StoreService) CreateStore(ctx context.Context, sellerID int64, name, de
 	if sellerID <= 0 {
 		return nil, fmt.Errorf("invalid seller id")
 	}
+	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, fmt.Errorf("store name cannot be empty")
 	}
 
-	existing, _ := s.storeRepo.GetBySellerID(ctx, sellerID)
+	existing, err := s.storeRepo.GetBySellerID(ctx, sellerID)
+	if err != nil {
+		return nil, fmt.Errorf("storeRepo.GetBySellerID: %w", err)
+	}
 	if existing != nil {
 		return nil, fmt.Errorf("seller already has a store")
 	}
@@ -38,7 +43,7 @@ func (s *StoreService) CreateStore(ctx context.Context, sellerID int64, name, de
 		Description: description,
 	}
 
-	err := s.storeRepo.Create(ctx, store)
+	err = s.storeRepo.Create(ctx, store)
 	if err != nil {
 		return nil, fmt.Errorf("storeRepo.Create: %w", err)
 	}
@@ -76,4 +81,15 @@ func (s *StoreService) GetBySellerID(ctx context.Context, sellerID int64) (*mode
 	}
 
 	return store, nil
+}
+
+func (s *StoreService) GetAll(ctx context.Context) ([]*models.Store, error) {
+	stores, err := s.storeRepo.GetAll(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching stores: %w", err)
+	}
+	if stores == nil {
+		stores = []*models.Store{}
+	}
+	return stores, nil
 }

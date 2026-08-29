@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
+	"net/mail"
+	"strings"
 	"time"
 
 	"shop/internal/models"
@@ -31,6 +33,18 @@ func NewUserService(
 }
 
 func (s *UserService) Register(ctx context.Context, email, password string) error {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		return pkgerr.ErrInvalidEmail
+	}
+	if _, err := mail.ParseAddress(email); err != nil {
+		return pkgerr.ErrInvalidEmail
+	}
+
+	if len(password) < 6 {
+		return pkgerr.ErrWeakPassword
+	}
+
 	existing, err := s.UserRepo.GetByEmail(ctx, email)
 	if err != nil {
 		return fmt.Errorf("userRepo.GetByEmail: %w", err)
@@ -58,6 +72,11 @@ func (s *UserService) Register(ctx context.Context, email, password string) erro
 }
 
 func (s *UserService) Login(ctx context.Context, email, password string) (string, string, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" || password == "" {
+		return "", "", pkgerr.ErrAccessDenied
+	}
+
 	user, err := s.UserRepo.GetByEmail(ctx, email)
 	if err != nil {
 		return "", "", fmt.Errorf("userRepo.GetByEmail: %w", err)
@@ -69,6 +88,10 @@ func (s *UserService) Login(ctx context.Context, email, password string) (string
 		return "", "", pkgerr.ErrAccessDenied
 	}
 
+	return s.issueTokens(ctx, user)
+}
+
+func (s *UserService) issueTokens(ctx context.Context, user *models.User) (string, string, error) {
 	accessToken, err := s.JWTService.GenerateToken(user.ID, user.Email, string(user.Role))
 	if err != nil {
 		return "", "", fmt.Errorf("access token creation failed: %w", err)
@@ -82,7 +105,7 @@ func (s *UserService) Login(ctx context.Context, email, password string) (string
 	refreshTokenModel := &models.RefreshToken{
 		UserID:    user.ID,
 		Token:     refreshTokenStr,
-		ExpiresAt: time.Now().Add(30 * 24 * time.Hour), // 30 days
+		ExpiresAt: time.Now().Add(30 * 24 * time.Hour),
 	}
 
 	if err := s.RefreshTokenRepo.Create(ctx, refreshTokenModel); err != nil {
@@ -119,27 +142,37 @@ func (s *UserService) RefreshToken(ctx context.Context, refreshTokenStr string) 
 	// Token rotation: delete old refresh token
 	_ = s.RefreshTokenRepo.DeleteByToken(ctx, refreshTokenStr)
 
-	newAccessToken, err := s.JWTService.GenerateToken(user.ID, user.Email, string(user.Role))
+	return s.issueTokens(ctx, user)
+}
+
+func (s *UserService) SetRole(ctx context.Context, userID int64, role models.Role) (string, string, error) {
+	if role != models.RoleCustomer && role != models.RoleSeller {
+		return "", "", pkgerr.ErrInvalidRole
+	}
+
+	user, err := s.UserRepo.GetByID(ctx, userID)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to generate new access token: %w", err)
+		return "", "", fmt.Errorf("userRepo.GetByID: %w", err)
+	}
+	if user == nil {
+		return "", "", pkgerr.ErrUserNotFound
+	}
+	if user.Role == models.RoleAdmin {
+		return "", "", pkgerr.ErrAccessDenied
+	}
+	if user.Role == models.RoleSeller && role == models.RoleCustomer {
+		return "", "", pkgerr.ErrAccessDenied
 	}
 
-	newRefreshTokenStr, err := s.JWTService.GenerateRefreshToken()
-	if err != nil {
-		return "", "", fmt.Errorf("failed to generate new refresh token: %w", err)
+	if user.Role != role {
+		if err := s.UserRepo.UpdateRole(ctx, userID, role); err != nil {
+			return "", "", fmt.Errorf("userRepo.UpdateRole: %w", err)
+		}
+		user.Role = role
 	}
 
-	newRefreshTokenModel := &models.RefreshToken{
-		UserID:    user.ID,
-		Token:     newRefreshTokenStr,
-		ExpiresAt: time.Now().Add(30 * 24 * time.Hour),
-	}
-
-	if err := s.RefreshTokenRepo.Create(ctx, newRefreshTokenModel); err != nil {
-		return "", "", fmt.Errorf("failed to save new refresh token: %w", err)
-	}
-
-	return newAccessToken, newRefreshTokenStr, nil
+	_ = s.RefreshTokenRepo.DeleteByUserID(ctx, userID)
+	return s.issueTokens(ctx, user)
 }
 
 func (s *UserService) Logout(ctx context.Context, refreshTokenStr string) error {

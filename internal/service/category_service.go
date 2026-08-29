@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"shop/internal/models"
 	"shop/internal/repository"
@@ -18,6 +19,7 @@ func NewCategoryService(categoryRepo repository.CategoryRepository) *CategorySer
 }
 
 func (s *CategoryService) CreateCategory(ctx context.Context, name string) (*models.Category, error) {
+	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, fmt.Errorf("category name cannot be empty")
 	}

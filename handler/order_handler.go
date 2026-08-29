@@ -45,9 +45,12 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customerID := req.CustomerID
-	if authID, ok := middleware.GetUserID(r.Context()); ok && authID > 0 {
-		customerID = authID
+	authID, _ := middleware.GetUserID(r.Context())
+	userRole, _ := middleware.GetUserRole(r.Context())
+
+	customerID := authID
+	if userRole == string(models.RoleAdmin) && req.CustomerID > 0 {
+		customerID = req.CustomerID
 	}
 	if customerID <= 0 {
 		respondWithError(w, http.StatusBadRequest, "customer_id is required")
@@ -71,7 +74,11 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	order, err := h.OrderService.Create(r.Context(), customerID, items)
 	if err != nil {
-		if errors.Is(err, pkgerr.ErrInsufficientStock) || errors.Is(err, pkgerr.ErrEmptyOrder) || errors.Is(err, pkgerr.ErrProductNotFound) {
+		if errors.Is(err, pkgerr.ErrInsufficientStock) ||
+			errors.Is(err, pkgerr.ErrEmptyOrder) ||
+			errors.Is(err, pkgerr.ErrProductNotFound) ||
+			errors.Is(err, pkgerr.ErrMultiStoreOrder) ||
+			errors.Is(err, pkgerr.ErrInvalidOrder) {
 			respondWithError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -115,20 +122,32 @@ func (h *OrderHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *OrderHandler) GetUserOrders(w http.ResponseWriter, r *http.Request) {
-	var customerID int64
-	if authID, ok := middleware.GetUserID(r.Context()); ok && authID > 0 {
-		customerID = authID
-	} else {
-		userIDStr := r.URL.Query().Get("user_id")
-		if userIDStr == "" {
-			userIDStr = r.URL.Query().Get("customer_id")
-		}
-		var err error
-		customerID, err = strconv.ParseInt(userIDStr, 10, 64)
-		if err != nil || customerID <= 0 {
+	authID, _ := middleware.GetUserID(r.Context())
+	userRole, _ := middleware.GetUserRole(r.Context())
+
+	customerID := authID
+
+	targetIDStr := r.URL.Query().Get("user_id")
+	if targetIDStr == "" {
+		targetIDStr = r.URL.Query().Get("customer_id")
+	}
+
+	if targetIDStr != "" {
+		targetID, err := strconv.ParseInt(targetIDStr, 10, 64)
+		if err != nil || targetID <= 0 {
 			respondWithError(w, http.StatusBadRequest, "invalid user_id parameter")
 			return
 		}
+		if userRole != string(models.RoleAdmin) && targetID != authID {
+			respondWithError(w, http.StatusForbidden, "access denied to other users' orders")
+			return
+		}
+		customerID = targetID
+	}
+
+	if customerID <= 0 {
+		respondWithError(w, http.StatusBadRequest, "customer_id is required")
+		return
 	}
 
 	orders, err := h.OrderService.GetByCustomerID(r.Context(), customerID)

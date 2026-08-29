@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"shop/handler"
@@ -16,11 +20,12 @@ import (
 	"shop/pkg/logger"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 )
 
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	cfg, err := config.New("config.env")
 	if err != nil {
@@ -31,6 +36,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to init logger: %v", err)
 	}
+	defer func() {
+		_ = appLogger.Sync()
+	}()
 
 	ttl, err := time.ParseDuration(cfg.JWT.TTL)
 	if err != nil {
@@ -54,7 +62,7 @@ func main() {
 
 	// ---------- AUTO MIGRATIONS ----------
 	if err := migrations.Run(migratorDSN); err != nil {
-		log.Printf("Warning: Database auto-migration failed or skipped: %v", err)
+		appLogger.Warn("Database auto-migration failed or skipped", zap.Error(err))
 	}
 
 	dsn := fmt.Sprintf(
@@ -101,6 +109,7 @@ func main() {
 
 	router := handler.NewRouter(handler.Deps{
 		JWTService:      jwtService,
+		Logger:          appLogger,
 		UserHandler:     userHandler,
 		StoreHandler:    storeHandler,
 		CategoryHandler: categoryHandler,
@@ -109,14 +118,35 @@ func main() {
 	})
 
 	server := &http.Server{
-		Addr:    cfg.HTTPPort,
-		Handler: router,
+		Addr:         cfg.HTTPPort,
+		Handler:      router,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
-	log.Printf("Server is running on %s", cfg.HTTPPort)
-	log.Printf("Swagger UI available at http://localhost%s/swagger/", cfg.HTTPPort)
+	serverErrors := make(chan error, 1)
+	go func() {
+		appLogger.Info("Server is running", zap.String("port", cfg.HTTPPort))
+		appLogger.Info(fmt.Sprintf("Swagger UI available at http://localhost%s/swagger/", cfg.HTTPPort))
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErrors <- err
+		}
+	}()
 
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("Server failed to start: %v", err)
+	select {
+	case err := <-serverErrors:
+		appLogger.Fatal("Server error", zap.Error(err))
+	case <-ctx.Done():
+		appLogger.Info("Shutting down server gracefully...")
+
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer shutdownCancel()
+
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			appLogger.Error("Server forced to shutdown", zap.Error(err))
+			_ = server.Close()
+		}
+		appLogger.Info("Server exited cleanly")
 	}
 }

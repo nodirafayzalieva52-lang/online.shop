@@ -18,92 +18,113 @@ func NewProductRepository(db *pgxpool.Pool) *ProductRepo {
 	return &ProductRepo{db: db}
 }
 
+const productSelectCols = `id, store_id, category_id, name, description, price, stock, COALESCE(image_url, ''), created_at, updated_at`
+
+func scanProduct(scan func(dest ...any) error) (*models.Product, error) {
+	var p models.Product
+	var catID *int64
+	if err := scan(
+		&p.ID,
+		&p.StoreID,
+		&catID,
+		&p.Name,
+		&p.Description,
+		&p.Price,
+		&p.Stock,
+		&p.ImageURL,
+		&p.CreatedAt,
+		&p.UpdatedAt,
+	); err != nil {
+		return nil, err
+	}
+	if catID != nil {
+		p.CategoryID = *catID
+	}
+	return &p, nil
+}
+
+func nullableCategoryID(id int64) *int64 {
+	if id <= 0 {
+		return nil
+	}
+	return &id
+}
+
 func (r *ProductRepo) Create(ctx context.Context, product *models.Product) error {
-	query := `INSERT INTO products (store_id, category_id, name, description, price, stock)
-	VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at, updated_at`
+	query := `INSERT INTO products (store_id, category_id, name, description, price, stock, image_url)
+	VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, created_at, updated_at`
 
 	return r.db.QueryRow(ctx, query,
 		product.StoreID,
-		product.CategoryID,
+		nullableCategoryID(product.CategoryID),
 		product.Name,
 		product.Description,
 		product.Price,
 		product.Stock,
+		product.ImageURL,
 	).Scan(&product.ID, &product.CreatedAt, &product.UpdatedAt)
 }
 
 func (r *ProductRepo) GetByID(ctx context.Context, id int64) (*models.Product, error) {
-	query := `SELECT id, store_id, category_id, name, description, price, stock, created_at, updated_at
-	FROM products WHERE id = $1`
+	query := `SELECT ` + productSelectCols + ` FROM products WHERE id = $1`
 
-	var p models.Product
-	err := r.db.QueryRow(ctx, query, id).Scan(
-		&p.ID, &p.StoreID, &p.CategoryID, &p.Name,
-		&p.Description, &p.Price, &p.Stock, &p.CreatedAt, &p.UpdatedAt,
-	)
+	p, err := scanProduct(r.db.QueryRow(ctx, query, id).Scan)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	return &p, nil
+	return p, nil
 }
 
 func (r *ProductRepo) GetByStoreID(ctx context.Context, storeID int64) ([]*models.Product, error) {
-	query := `SELECT id, store_id, category_id, name, description, price, stock, created_at, updated_at
-	FROM products WHERE store_id = $1 ORDER BY created_at DESC`
+	query := `SELECT ` + productSelectCols + ` FROM products WHERE store_id = $1 ORDER BY created_at DESC`
+	return r.list(ctx, query, storeID)
+}
 
-	rows, err := r.db.Query(ctx, query, storeID)
+func (r *ProductRepo) GetAll(ctx context.Context) ([]*models.Product, error) {
+	query := `SELECT ` + productSelectCols + ` FROM products ORDER BY id DESC`
+	return r.list(ctx, query)
+}
+
+func (r *ProductRepo) list(ctx context.Context, query string, args ...any) ([]*models.Product, error) {
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var products []*models.Product
+	products := make([]*models.Product, 0)
 	for rows.Next() {
-		var p models.Product
-		if err := rows.Scan(
-			&p.ID, &p.StoreID, &p.CategoryID, &p.Name,
-			&p.Description, &p.Price, &p.Stock, &p.CreatedAt, &p.UpdatedAt,
-		); err != nil {
+		p, err := scanProduct(rows.Scan)
+		if err != nil {
 			return nil, err
 		}
-		products = append(products, &p)
+		products = append(products, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return products, nil
 }
 
-func (r *ProductRepo) GetAll(ctx context.Context) ([]*models.Product, error) {
-	query := `SELECT id, store_id, category_id, name, description, price, stock, created_at, updated_at
-	FROM products ORDER BY id DESC`
+func (r *ProductRepo) Update(ctx context.Context, product *models.Product) error {
+	query := `
+		UPDATE products
+		SET category_id = $1, name = $2, description = $3, price = $4, stock = $5, image_url = $6, updated_at = NOW()
+		WHERE id = $7
+		RETURNING updated_at`
 
-	rows, err := r.db.Query(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var products []*models.Product
-	for rows.Next() {
-		var p models.Product
-		err := rows.Scan(
-			&p.ID,
-			&p.StoreID,
-			&p.CategoryID,
-			&p.Name,
-			&p.Description,
-			&p.Price,
-			&p.Stock,
-			&p.CreatedAt,
-			&p.UpdatedAt,
-		)
-		if err != nil {
-			return nil, err
-		}
-		products = append(products, &p)
-	}
-	return products, nil
+	return r.db.QueryRow(ctx, query,
+		nullableCategoryID(product.CategoryID),
+		product.Name,
+		product.Description,
+		product.Price,
+		product.Stock,
+		product.ImageURL,
+		product.ID,
+	).Scan(&product.UpdatedAt)
 }
 
 func (r *ProductRepo) UpdateStock(ctx context.Context, productID int64, delta int) error {

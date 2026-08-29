@@ -35,6 +35,19 @@ func (s *OrderService) Create(ctx context.Context, customerID int64, items []mod
 		return nil, pkgerr.ErrEmptyOrder
 	}
 
+	// Consolidate quantities for duplicate product IDs in the request
+	consolidatedMap := make(map[int64]int)
+	var productOrder []int64
+	for _, item := range items {
+		if item.ProductID <= 0 || item.Quantity <= 0 {
+			return nil, fmt.Errorf("%w: product_id and quantity must be greater than zero", pkgerr.ErrInvalidOrder)
+		}
+		if _, exists := consolidatedMap[item.ProductID]; !exists {
+			productOrder = append(productOrder, item.ProductID)
+		}
+		consolidatedMap[item.ProductID] += item.Quantity
+	}
+
 	var (
 		totalPrice float64
 		storeID    int64
@@ -42,43 +55,47 @@ func (s *OrderService) Create(ctx context.Context, customerID int64, items []mod
 		deducted   []models.OrderItem
 	)
 
-	for _, item := range items {
-		if item.ProductID <= 0 || item.Quantity <= 0 {
-			return nil, fmt.Errorf("%w: product_id and quantity must be greater than zero", pkgerr.ErrInvalidOrder)
-		}
+	rollbackCtx := context.Background()
 
-		product, err := s.ProductRepo.GetByID(ctx, item.ProductID)
+	for _, pid := range productOrder {
+		qty := consolidatedMap[pid]
+
+		product, err := s.ProductRepo.GetByID(ctx, pid)
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch product %d: %w", item.ProductID, err)
+			s.rollbackStock(rollbackCtx, deducted)
+			return nil, fmt.Errorf("failed to fetch product %d: %w", pid, err)
 		}
 		if product == nil {
-			return nil, fmt.Errorf("%w: product %d not found", pkgerr.ErrProductNotFound, item.ProductID)
+			s.rollbackStock(rollbackCtx, deducted)
+			return nil, fmt.Errorf("%w: product %d not found", pkgerr.ErrProductNotFound, pid)
 		}
 
-		if product.Stock < item.Quantity {
-			return nil, fmt.Errorf("%w: product %s (requested: %d, available: %d)", pkgerr.ErrInsufficientStock, product.Name, item.Quantity, product.Stock)
+		if product.Stock < qty {
+			s.rollbackStock(rollbackCtx, deducted)
+			return nil, fmt.Errorf("%w: product %s (requested: %d, available: %d)", pkgerr.ErrInsufficientStock, product.Name, qty, product.Stock)
 		}
 
 		if storeID == 0 {
 			storeID = product.StoreID
+		} else if storeID != product.StoreID {
+			s.rollbackStock(rollbackCtx, deducted)
+			return nil, pkgerr.ErrMultiStoreOrder
 		}
 
 		// Deduct stock
-		if err := s.ProductRepo.UpdateStock(ctx, item.ProductID, -item.Quantity); err != nil {
-			for _, d := range deducted {
-				_ = s.ProductRepo.UpdateStock(ctx, d.ProductID, d.Quantity)
-			}
-			return nil, fmt.Errorf("failed to update stock for product %d: %w", item.ProductID, err)
+		if err := s.ProductRepo.UpdateStock(ctx, pid, -qty); err != nil {
+			s.rollbackStock(rollbackCtx, deducted)
+			return nil, fmt.Errorf("failed to update stock for product %d: %w", pid, err)
 		}
-		deducted = append(deducted, item)
+		deducted = append(deducted, models.OrderItem{ProductID: pid, Quantity: qty})
 
 		itemPrice := product.Price
-		totalPrice += itemPrice * float64(item.Quantity)
+		totalPrice += itemPrice * float64(qty)
 
 		processed = append(processed, models.OrderItem{
-			ProductID: item.ProductID,
+			ProductID: pid,
 			StoreID:   product.StoreID,
-			Quantity:  item.Quantity,
+			Quantity:  qty,
 			Price:     itemPrice,
 			Product:   product,
 		})
@@ -93,13 +110,17 @@ func (s *OrderService) Create(ctx context.Context, customerID int64, items []mod
 	}
 
 	if err := s.OrderRepo.Create(ctx, order); err != nil {
-		for _, d := range deducted {
-			_ = s.ProductRepo.UpdateStock(ctx, d.ProductID, d.Quantity)
-		}
+		s.rollbackStock(rollbackCtx, deducted)
 		return nil, fmt.Errorf("failed to create order in repo: %w", err)
 	}
 
 	return order, nil
+}
+
+func (s *OrderService) rollbackStock(ctx context.Context, deducted []models.OrderItem) {
+	for _, d := range deducted {
+		_ = s.ProductRepo.UpdateStock(ctx, d.ProductID, d.Quantity)
+	}
 }
 
 func (s *OrderService) GetByCustomerID(ctx context.Context, customerID int64) ([]*models.Order, error) {

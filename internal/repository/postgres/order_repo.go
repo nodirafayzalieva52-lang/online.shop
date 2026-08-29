@@ -69,7 +69,7 @@ func (r *OrderRepository) getOrderItems(ctx context.Context, orderID int64) ([]m
 	}
 	defer rows.Close()
 
-	var items []models.OrderItem
+	items := make([]models.OrderItem, 0)
 	for rows.Next() {
 		var item models.OrderItem
 		if err := rows.Scan(&item.ID, &item.OrderID, &item.ProductID, &item.StoreID, &item.Quantity, &item.Price); err != nil {
@@ -77,7 +77,10 @@ func (r *OrderRepository) getOrderItems(ctx context.Context, orderID int64) ([]m
 		}
 		items = append(items, item)
 	}
-	return items, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 func (r *OrderRepository) GetByCustomerID(ctx context.Context, customerID int64) ([]*models.Order, error) {
@@ -90,7 +93,7 @@ func (r *OrderRepository) GetByCustomerID(ctx context.Context, customerID int64)
 	}
 	defer rows.Close()
 
-	var orders []*models.Order
+	orders := make([]*models.Order, 0)
 	for rows.Next() {
 		var o models.Order
 		if err := rows.Scan(
@@ -104,6 +107,9 @@ func (r *OrderRepository) GetByCustomerID(ctx context.Context, customerID int64)
 			return nil, err
 		}
 		orders = append(orders, &o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	for _, o := range orders {
@@ -126,7 +132,7 @@ func (r *OrderRepository) GetByStoreID(ctx context.Context, storeID int64) ([]*m
 	}
 	defer rows.Close()
 
-	var orders []*models.Order
+	orders := make([]*models.Order, 0)
 	for rows.Next() {
 		var o models.Order
 		if err := rows.Scan(
@@ -140,6 +146,9 @@ func (r *OrderRepository) GetByStoreID(ctx context.Context, storeID int64) ([]*m
 			return nil, err
 		}
 		orders = append(orders, &o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	for _, o := range orders {

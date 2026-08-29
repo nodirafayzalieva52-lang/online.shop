@@ -14,4 +14,8 @@ var (
 	ErrCategoryNotFound  = errors.New("category not found")
 	ErrProductNotFound   = errors.New("product not found")
 	ErrInsufficientStock = errors.New("insufficient product stock")
+	ErrInvalidEmail      = errors.New("invalid email address")
+	ErrWeakPassword      = errors.New("password must be at least 6 characters long")
+	ErrMultiStoreOrder   = errors.New("all items in an order must belong to the same store")
+	ErrInvalidRole       = errors.New("invalid role")
 )

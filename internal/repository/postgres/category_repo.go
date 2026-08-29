@@ -33,13 +33,16 @@ func (r *CategoryRepo) GetAll(ctx context.Context) ([]*models.Category, error) {
 	}
 	defer rows.Close()
 
-	var categories []*models.Category
+	categories := make([]*models.Category, 0)
 	for rows.Next() {
 		var cat models.Category
 		if err := rows.Scan(&cat.ID, &cat.Name); err != nil {
 			return nil, err
 		}
 		categories = append(categories, &cat)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return categories, nil
 }

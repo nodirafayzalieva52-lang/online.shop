@@ -57,3 +57,15 @@ func (r *UserRepo) GetByEmail(ctx context.Context, email string) (*models.User, 
 	}
 	return &user, nil
 }
+
+func (r *UserRepo) UpdateRole(ctx context.Context, userID int64, role models.Role) error {
+	const query = `UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2`
+	tag, err := r.db.Exec(ctx, query, role, userID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.New("user not found")
+	}
+	return nil
+}

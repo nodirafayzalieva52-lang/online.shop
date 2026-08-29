@@ -53,3 +53,26 @@ func (r *StoreRepo) GetBySellerID(ctx context.Context, sellerID int64) (*models.
 	}
 	return &store, nil
 }
+
+func (r *StoreRepo) GetAll(ctx context.Context) ([]*models.Store, error) {
+	query := `SELECT id, seller_id, name, description, created_at FROM stores ORDER BY name`
+
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	stores := make([]*models.Store, 0)
+	for rows.Next() {
+		var store models.Store
+		if err := rows.Scan(&store.ID, &store.SellerID, &store.Name, &store.Description, &store.CreatedAt); err != nil {
+			return nil, err
+		}
+		stores = append(stores, &store)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return stores, nil
+}
