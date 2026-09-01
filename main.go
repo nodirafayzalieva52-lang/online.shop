@@ -50,21 +50,6 @@ func main() {
 		log.Fatalf("failed to init jwt service: %v", err)
 	}
 
-	migratorDSN := fmt.Sprintf(
-		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
-		cfg.Postgres.User,
-		cfg.Postgres.Password,
-		cfg.Postgres.Host,
-		cfg.Postgres.Port,
-		cfg.Postgres.DBName,
-		cfg.Postgres.SSLMode,
-	)
-
-	// ---------- AUTO MIGRATIONS ----------
-	if err := migrations.Run(migratorDSN); err != nil {
-		appLogger.Warn("Database auto-migration failed or skipped", zap.Error(err))
-	}
-
 	dsn := fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		cfg.Postgres.Host,
@@ -80,6 +65,11 @@ func main() {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
 	defer pool.Close()
+
+	// ---------- AUTO MIGRATIONS ----------
+	if err := migrations.Run(ctx, pool); err != nil {
+		appLogger.Warn("Database auto-migration failed or skipped", zap.Error(err))
+	}
 
 	// ---------- REFRESH TOKEN & USER ----------
 	userRepo := postgres.NewUserRepository(pool)
