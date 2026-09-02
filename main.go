@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"shop/ai"
 	"shop/handler"
 	"shop/internal/config"
 	"shop/internal/repository/postgres"
@@ -66,10 +67,17 @@ func main() {
 	}
 	defer pool.Close()
 
+
 	// ---------- AUTO MIGRATIONS ----------
 	if err := migrations.Run(ctx, pool); err != nil {
 		appLogger.Warn("Database auto-migration failed or skipped", zap.Error(err))
 	}
+
+    reply, err := ai.AskAI("Найди мне худи до 200 сомони")
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("Ответ ИИ:", reply)
 
 	// ---------- REFRESH TOKEN & USER ----------
 	userRepo := postgres.NewUserRepository(pool)
@@ -114,7 +122,6 @@ func main() {
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
-
 	serverErrors := make(chan error, 1)
 	go func() {
 		appLogger.Info("Server is running", zap.String("port", cfg.HTTPPort))
