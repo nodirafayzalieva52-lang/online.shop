@@ -19,7 +19,6 @@ require (
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rogpeppe/go-internal v1.16.0 // indirect
-	github.com/sashabaranov/go-openai v1.42.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
