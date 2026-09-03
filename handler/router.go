@@ -20,6 +20,7 @@ type Deps struct {
 	CategoryHandler *CategoryHandler
 	ProductHandler  *ProductHandler
 	OrderHandler    *OrderHandler
+	ReviewHandler   *ReviewHandler
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -49,6 +50,8 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("GET /stores", d.StoreHandler.GetAll)
 	mux.HandleFunc("GET /stores/{id}", d.StoreHandler.GetByID)
 	mux.HandleFunc("GET /stores/seller/{seller_id}", d.StoreHandler.GetBySellerID)
+
+	mux.HandleFunc("POST /ai/reviews", d.ReviewHandler.GenerateReview)
 
 	// ---------- PROTECTED WITH RBAC ----------
 	mux.Handle("PATCH /users/me/role", auth(http.HandlerFunc(d.UserHandler.SetRole)))

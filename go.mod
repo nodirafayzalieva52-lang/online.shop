@@ -6,6 +6,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/jackc/pgx/v5 v5.10.0
+	github.com/sashabaranov/go-openai v1.42.0
 	go.uber.org/zap v1.28.0
 	golang.org/x/crypto v0.55.0
 )

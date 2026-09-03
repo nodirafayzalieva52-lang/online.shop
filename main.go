@@ -98,6 +98,9 @@ func main() {
 	orderService := service.NewOrderService(orderRepo, productRepo, storeRepo)
 	orderHandler := handler.NewOrderHandler(orderService, appLogger)
 
+	// ---------- REVIEW (AI) ----------
+	reviewHandler := handler.NewReviewHandler()
+
 	router := handler.NewRouter(handler.Deps{
 		JWTService:      jwtService,
 		Logger:          appLogger,
@@ -106,6 +109,7 @@ func main() {
 		CategoryHandler: categoryHandler,
 		ProductHandler:  productHandler,
 		OrderHandler:    orderHandler,
+		ReviewHandler:   reviewHandler,
 	})
 
 	server := &http.Server{
