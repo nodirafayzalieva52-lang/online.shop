@@ -27,7 +27,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	cfg, err := config.New("config.env")
+	cfg, err := config.New(".env")
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}

@@ -78,7 +78,8 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 			errors.Is(err, pkgerr.ErrEmptyOrder) ||
 			errors.Is(err, pkgerr.ErrProductNotFound) ||
 			errors.Is(err, pkgerr.ErrMultiStoreOrder) ||
-			errors.Is(err, pkgerr.ErrInvalidOrder) {
+			errors.Is(err, pkgerr.ErrInvalidOrder) ||
+			errors.Is(err, pkgerr.ErrSelfPurchase) { // <-- Добавлена проверка
 			respondWithError(w, http.StatusBadRequest, err.Error())
 			return
 		}

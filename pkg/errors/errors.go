@@ -18,4 +18,5 @@ var (
 	ErrWeakPassword      = errors.New("password must be at least 6 characters long")
 	ErrMultiStoreOrder   = errors.New("all items in an order must belong to the same store")
 	ErrInvalidRole       = errors.New("invalid role")
+	ErrSelfPurchase 	 = errors.New("sellers cannot purchase products from their own store")	
 )

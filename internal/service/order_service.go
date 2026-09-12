@@ -26,8 +26,8 @@ func NewOrderService(
 		StoreRepo:   storeRepo,
 	}
 }
-
 func (s *OrderService) Create(ctx context.Context, customerID int64, items []models.OrderItem) (*models.Order, error) {
+	fmt.Printf("===> [DEBUG] Received customerID: %d\n", customerID)
 	if customerID <= 0 {
 		return nil, pkgerr.ErrAccessDenied
 	}
@@ -65,6 +65,7 @@ func (s *OrderService) Create(ctx context.Context, customerID int64, items []mod
 			s.rollbackStock(rollbackCtx, deducted)
 			return nil, fmt.Errorf("failed to fetch product %d: %w", pid, err)
 		}
+		fmt.Printf("===> [DEBUG] Product ID: %d, Product StoreID: %d\n", pid, product.StoreID)
 		if product == nil {
 			s.rollbackStock(rollbackCtx, deducted)
 			return nil, fmt.Errorf("%w: product %d not found", pkgerr.ErrProductNotFound, pid)
@@ -77,6 +78,20 @@ func (s *OrderService) Create(ctx context.Context, customerID int64, items []mod
 
 		if storeID == 0 {
 			storeID = product.StoreID
+
+			// === ПРОВЕРКА: Продавец не может покупать у самого себя ===
+			store, err := s.StoreRepo.GetByID(ctx, storeID)
+			if err != nil {
+				s.rollbackStock(rollbackCtx, deducted)
+				return nil, fmt.Errorf("failed to fetch store %d: %w", storeID, err)
+			}
+			if store != nil && store.SellerID == customerID {
+				s.rollbackStock(rollbackCtx, deducted)
+				return nil, pkgerr.ErrSelfPurchase
+			}
+			
+			// ========================================================
+
 		} else if storeID != product.StoreID {
 			s.rollbackStock(rollbackCtx, deducted)
 			return nil, pkgerr.ErrMultiStoreOrder
