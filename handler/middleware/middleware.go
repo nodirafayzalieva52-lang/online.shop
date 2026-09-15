@@ -118,13 +118,53 @@ func RequireRole(allowedRoles ...models.Role) func(http.Handler) http.Handler {
 
 			userRole := models.Role(userRoleStr)
 			for _, allowed := range allowedRoles {
-				if userRole == allowed {
+				if userRole == allowed ||
+					(userRole == models.RoleCustomer && allowed == models.RoleClient) ||
+					(userRole == models.RoleClient && allowed == models.RoleCustomer) {
 					next.ServeHTTP(w, r)
 					return
 				}
 			}
 
 			respondJSONError(w, http.StatusForbidden, "insufficient permissions")
+		})
+	}
+}
+
+func RequireCompletedOnboarding() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			userRoleStr, ok := GetUserRole(r.Context())
+			if !ok {
+				respondJSONError(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+
+			if userRoleStr == "unassigned" || models.Role(userRoleStr) == models.RoleUnassigned {
+				respondJSONError(w, http.StatusForbidden, "onboarding required")
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func RequireUnassignedRole() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			userRoleStr, ok := GetUserRole(r.Context())
+			if !ok {
+				respondJSONError(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+
+			if userRoleStr != "unassigned" && models.Role(userRoleStr) != models.RoleUnassigned {
+				respondJSONError(w, http.StatusBadRequest, "role already assigned")
+				return
+			}
+
+			next.ServeHTTP(w, r)
 		})
 	}
 }

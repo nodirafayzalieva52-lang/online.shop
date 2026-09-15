@@ -104,3 +104,89 @@ func TestRecoveryMiddleware(t *testing.T) {
 		t.Fatalf("expected status 500 on recovered panic, got %d", rr.Code)
 	}
 }
+
+func TestRequireRole_AllRoles(t *testing.T) {
+	jwtSvc, _ := jwt.NewService("test-secret-key-12345", time.Hour)
+	adminToken, _ := jwtSvc.GenerateToken(1, "admin@test.com", string(models.RoleAdmin))
+	sellerToken, _ := jwtSvc.GenerateToken(2, "seller@test.com", string(models.RoleSeller))
+	clientToken, _ := jwtSvc.GenerateToken(3, "client@test.com", string(models.RoleClient))
+
+	authMW := middleware.AuthMiddleware(jwtSvc)
+	roleMW := middleware.RequireRole(models.RoleAdmin, models.RoleSeller, models.RoleClient)
+
+	testHandler := authMW(roleMW(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})))
+
+	for _, token := range []string{adminToken, sellerToken, clientToken} {
+		req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rr := httptest.NewRecorder()
+		testHandler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected role token to pass, got %d", rr.Code)
+		}
+	}
+}
+
+func TestRequireCompletedOnboarding(t *testing.T) {
+	jwtSvc, _ := jwt.NewService("test-secret-key-12345", time.Hour)
+	unassignedToken, _ := jwtSvc.GenerateToken(1, "unassigned@test.com", string(models.RoleUnassigned))
+	clientToken, _ := jwtSvc.GenerateToken(2, "client@test.com", string(models.RoleClient))
+
+	authMW := middleware.AuthMiddleware(jwtSvc)
+	onboardingMW := middleware.RequireCompletedOnboarding()
+
+	handler := authMW(onboardingMW(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})))
+
+	// 1. Unassigned role -> 403 Forbidden
+	req1 := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+	req1.Header.Set("Authorization", "Bearer "+unassignedToken)
+	rr1 := httptest.NewRecorder()
+	handler.ServeHTTP(rr1, req1)
+	if rr1.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden for unassigned role, got %d", rr1.Code)
+	}
+
+	// 2. Client role -> 200 OK
+	req2 := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+	req2.Header.Set("Authorization", "Bearer "+clientToken)
+	rr2 := httptest.NewRecorder()
+	handler.ServeHTTP(rr2, req2)
+	if rr2.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for completed onboarding, got %d", rr2.Code)
+	}
+}
+
+func TestRequireUnassignedRole(t *testing.T) {
+	jwtSvc, _ := jwt.NewService("test-secret-key-12345", time.Hour)
+	unassignedToken, _ := jwtSvc.GenerateToken(1, "unassigned@test.com", string(models.RoleUnassigned))
+	clientToken, _ := jwtSvc.GenerateToken(2, "client@test.com", string(models.RoleClient))
+
+	authMW := middleware.AuthMiddleware(jwtSvc)
+	unassignedMW := middleware.RequireUnassignedRole()
+
+	handler := authMW(unassignedMW(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})))
+
+	// 1. Unassigned role -> 200 OK
+	req1 := httptest.NewRequest(http.MethodPost, "/onboarding/role", nil)
+	req1.Header.Set("Authorization", "Bearer "+unassignedToken)
+	rr1 := httptest.NewRecorder()
+	handler.ServeHTTP(rr1, req1)
+	if rr1.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for unassigned role, got %d", rr1.Code)
+	}
+
+	// 2. Client role (already assigned) -> 400 Bad Request
+	req2 := httptest.NewRequest(http.MethodPost, "/onboarding/role", nil)
+	req2.Header.Set("Authorization", "Bearer "+clientToken)
+	rr2 := httptest.NewRecorder()
+	handler.ServeHTTP(rr2, req2)
+	if rr2.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request for already assigned role, got %d", rr2.Code)
+	}
+}
