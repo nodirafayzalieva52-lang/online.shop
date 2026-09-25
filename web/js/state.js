@@ -37,7 +37,41 @@ export function setCart(items) {
   write(`kinetiq.cart.${uid()}`, items);
 }
 
-export function addToCart(product, qty = 1) {
+let cachedUserStore = null;
+
+export function setCurrentUserStore(store) {
+  cachedUserStore = store;
+}
+
+export function getCurrentUserStore(stores = []) {
+  const user = currentUser();
+  if (!user) {
+    cachedUserStore = null;
+    return null;
+  }
+  if (cachedUserStore && Number(cachedUserStore.seller_id) === Number(user.id)) {
+    return cachedUserStore;
+  }
+  if (!stores || !stores.length) return cachedUserStore;
+  const found = stores.find((s) => Number(s.seller_id) === Number(user.id));
+  if (found) {
+    cachedUserStore = found;
+    return found;
+  }
+  return cachedUserStore;
+}
+
+export function isOwnProduct(product, stores = []) {
+  if (!product) return false;
+  const myStore = getCurrentUserStore(stores);
+  if (!myStore) return false;
+  return Number(product.store_id) === Number(myStore.id);
+}
+
+export function addToCart(product, qty = 1, stores = []) {
+  if (isOwnProduct(product, stores)) {
+    throw new Error("Нельзя добавить в корзину товар собственного магазина");
+  }
   const cart = getCart();
   const existing = cart.find((i) => i.product_id === product.id);
   const nextQty = (existing ? existing.quantity : 0) + qty;

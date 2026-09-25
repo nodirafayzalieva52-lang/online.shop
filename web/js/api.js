@@ -21,8 +21,12 @@ export function clearTokens() {
 
 function decodeJwt(token) {
   try {
-    const payload = token.split(".")[1];
-    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+    if (!token) return null;
+    let payload = token.split(".")[1];
+    if (!payload) return null;
+    payload = payload.replace(/-/g, "+").replace(/_/g, "/");
+    while (payload.length % 4) payload += "=";
+    const json = atob(payload);
     return JSON.parse(decodeURIComponent(escape(json)));
   } catch {
     return null;
@@ -32,8 +36,9 @@ function decodeJwt(token) {
 export function currentUser() {
   const claims = decodeJwt(getAccessToken());
   if (!claims) return null;
+  const uid = Number(claims.user_id);
   return {
-    id: claims.user_id,
+    id: isNaN(uid) ? claims.user_id : uid,
     email: claims.email,
     role: claims.role,
   };

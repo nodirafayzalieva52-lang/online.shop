@@ -402,6 +402,47 @@ a:hover { color: var(--text-primary); }
 }
 .stock-badge.in-stock { background: rgba(0,255,136,0.2); color: var(--green); border: 1px solid rgba(0,255,136,0.3); }
 .stock-badge.out-stock { background: rgba(255,51,102,0.2); color: var(--red); border: 1px solid rgba(255,51,102,0.3); }
+.stock-badge.own-badge {
+  background: rgba(183, 0, 255, 0.2);
+  color: #e2b6ff;
+  border: 1px solid rgba(183, 0, 255, 0.4);
+  box-shadow: 0 0 10px rgba(183, 0, 255, 0.25);
+}
+.product-card.product-card-own {
+  border-color: rgba(183, 0, 255, 0.25);
+}
+.product-card.product-card-own:hover {
+  border-color: var(--violet);
+  box-shadow: 0 0 16px rgba(183, 0, 255, 0.2);
+}
+.own-detail-pill {
+  position: absolute; top: 16px; left: 16px; z-index: 2;
+  font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  padding: 6px 12px; border-radius: 6px;
+  background: rgba(183, 0, 255, 0.25); color: #e2b6ff;
+  border: 1px solid rgba(183, 0, 255, 0.5);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 14px rgba(183, 0, 255, 0.3);
+}
+.own-product-notice {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: rgba(183, 0, 255, 0.08);
+  border: 1px solid rgba(183, 0, 255, 0.3);
+}
+.own-notice-title {
+  font-family: var(--font-head);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #e2b6ff;
+  margin-bottom: 4px;
+}
+.own-notice-text {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
 .product-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
 .product-cat-tag {
   display: inline-block; font-size: 0.65rem; font-weight: 600;

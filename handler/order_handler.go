@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -104,7 +105,7 @@ func (h *OrderHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 	userID, _ := middleware.GetUserID(r.Context())
 	userRole, _ := middleware.GetUserRole(r.Context())
-
+	log.Println(userRole)
 	order, err := h.OrderService.GetByID(r.Context(), id, userID, userRole)
 	if err != nil {
 		if errors.Is(err, pkgerr.ErrOrderNotFound) {
@@ -124,7 +125,12 @@ func (h *OrderHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 func (h *OrderHandler) GetUserOrders(w http.ResponseWriter, r *http.Request) {
 	authID, _ := middleware.GetUserID(r.Context())
-	userRole, _ := middleware.GetUserRole(r.Context())
+		userRole, ok := middleware.GetUserRole(r.Context())
+if !ok {
+h.log.Warn("user role not found in context")
+} else {
+h.log.Infof("extracted user role: %q for user_id: %d", userRole, authID)
+}
 
 	customerID := authID
 
@@ -156,7 +162,7 @@ func (h *OrderHandler) GetUserOrders(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-
+	log.Println(userRole)
 	respondWithJSON(w, http.StatusOK, orders)
 }
 
@@ -188,6 +194,6 @@ func (h *OrderHandler) GetStoreOrders(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-
+	log.Println(userRole)
 	respondWithJSON(w, http.StatusOK, orders)
 }

@@ -1,5 +1,5 @@
 import { currentUser } from "./api.js";
-import { cartCount, isFavorite } from "./state.js";
+import { cartCount, isFavorite, isOwnProduct } from "./state.js";
 import {
   escapeHtml,
   formatPrice,
@@ -83,10 +83,14 @@ export function shell(inner, { cartOpen = false } = {}) {
             <input id="global-search" type="search" placeholder="Поиск по витрине..." />
             <span class="search-icon">⌕</span>
           </div>
-          <button class="icon-btn" data-action="open-cart" title="Корзина" type="button">
+          ${
+            user
+              ? `<button class="icon-btn" data-action="open-cart" title="Корзина" type="button">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6h15l-1.5 9h-12z"/><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M6 6L5 3H2"/></svg>
             <span class="badge" id="cart-badge">${cartCount()}</span>
-          </button>
+          </button>`
+              : ""
+          }
           <button class="avatar-btn" data-action="logout" type="button" title="Выйти">
             <span class="avatar-circle">${escapeHtml(initials(user?.email))}</span>
             <span class="user-email">${escapeHtml(user?.email || "")}</span>
@@ -95,28 +99,42 @@ export function shell(inner, { cartOpen = false } = {}) {
       </header>
       <main id="app">${inner}</main>
     </div>
-    <div class="cart-overlay ${cartOpen ? "open" : ""}" data-action="close-cart"></div>
-    <aside class="cart-drawer ${cartOpen ? "open" : ""}" id="cart-drawer"></aside>
+    ${
+      user
+        ? `<div class="cart-overlay ${cartOpen ? "open" : ""}" data-action="close-cart"></div>
+    <aside class="cart-drawer ${cartOpen ? "open" : ""}" id="cart-drawer"></aside>`
+        : ""
+    }
   `;
 }
 
-export function productCard(p, categories) {
+export function productCard(p, categories, stores = []) {
   const fav = isFavorite(p.id);
   const out = !p.stock;
+  const isOwn = isOwnProduct(p, stores);
+
   return `
-    <article class="product-card" data-action="open-product" data-id="${p.id}">
+    <article class="product-card ${isOwn ? "product-card-own" : ""}" data-action="open-product" data-id="${p.id}">
       <div class="product-img-wrap">
         ${p.image_url ? `<img class="product-img" src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" />` : `<div class="product-img-placeholder">◆</div>`}
         <div class="product-img-overlay"></div>
         <button class="fav-btn ${fav ? "active" : ""}" type="button" data-action="toggle-fav" data-id="${p.id}" title="В избранное">${fav ? "♥" : "♡"}</button>
-        <span class="stock-badge ${out ? "out-stock" : "in-stock"}">${out ? "Нет в наличии" : "В наличии"}</span>
+        ${
+          isOwn
+            ? `<span class="stock-badge own-badge">Ваш товар</span>`
+            : `<span class="stock-badge ${out ? "out-stock" : "in-stock"}">${out ? "Нет в наличии" : "В наличии"}</span>`
+        }
       </div>
       <div class="product-body">
         <span class="product-cat-tag">${escapeHtml(categoryName(categories, p.category_id))}</span>
         <div class="product-name">${escapeHtml(p.name)}</div>
         <div class="product-price">${formatPrice(p.price)}</div>
         <div class="product-actions">
-          <button class="add-cart-btn" type="button" data-action="add-cart" data-id="${p.id}" ${out ? "disabled" : ""}>В корзину</button>
+          ${
+            isOwn
+              ? `<button class="btn btn-ghost btn-sm btn-full" type="button" data-action="nav" data-route="#/seller/product/${p.id}">Управление</button>`
+              : `<button class="add-cart-btn" type="button" data-action="add-cart" data-id="${p.id}" ${out ? "disabled" : ""}>В корзину</button>`
+          }
         </div>
       </div>
     </article>
@@ -148,7 +166,7 @@ export function catalogView({ products, categories, stores, filters }) {
   const grid =
     products.length === 0
       ? `<div class="empty-state"><div class="empty-state-icon">◇</div><div class="empty-state-title">Витрина пуста</div><div class="empty-state-sub">Измените фильтры или подождите появления товаров.</div></div>`
-      : `<div class="products-grid">${products.map((p) => productCard(p, categories)).join("")}</div>`;
+      : `<div class="products-grid">${products.map((p) => productCard(p, categories, stores)).join("")}</div>`;
 
   return `
     <div class="page-wide">
@@ -190,6 +208,8 @@ export function catalogView({ products, categories, stores, filters }) {
 export function productDetailView(p, categories, stores, qty = 1) {
   const fav = isFavorite(p.id);
   const out = !p.stock;
+  const isOwn = isOwnProduct(p, stores);
+
   return `
     <div class="page">
       <div class="breadcrumb">
@@ -197,10 +217,11 @@ export function productDetailView(p, categories, stores, qty = 1) {
         <span class="breadcrumb-sep">/</span>
         <span class="breadcrumb-current">${escapeHtml(p.name)}</span>
       </div>
-      <div class="product-detail">
+      <div class="product-detail ${isOwn ? "product-detail-own" : ""}">
         <div class="product-detail-img" style="position:relative">
           ${p.image_url ? `<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" />` : "◆"}
           <button class="fav-btn ${fav ? "active" : ""}" type="button" data-action="toggle-fav" data-id="${p.id}" style="top:16px;right:16px">${fav ? "♥" : "♡"}</button>
+          ${isOwn ? `<div class="own-detail-pill">★ Товар вашего магазина</div>` : ""}
         </div>
         <div class="product-detail-info">
           <span class="product-cat-tag product-detail-category">${escapeHtml(categoryName(categories, p.category_id))}</span>
@@ -217,6 +238,18 @@ export function productDetailView(p, categories, stores, qty = 1) {
               <div class="meta-value">${p.stock} шт.</div>
             </div>
           </div>
+          ${
+            isOwn
+              ? `
+          <div class="own-product-notice">
+            <div class="own-notice-title">Товар вашего магазина</div>
+            <div class="own-notice-text">Вы являетесь продавцом этого товара. Покупка собственных товаров в маркетплейсе отключена.</div>
+            <div class="detail-actions mt-16">
+              <button class="btn btn-violet" type="button" data-action="nav" data-route="#/seller/product/${p.id}">Редактировать товар</button>
+              <button class="btn btn-ghost" type="button" data-action="toggle-fav" data-id="${p.id}">${fav ? "Убрать из избранного" : "В избранное"}</button>
+            </div>
+          </div>`
+              : `
           <div class="qty-control">
             <button class="qty-btn" type="button" data-action="qty" data-delta="-1">−</button>
             <span class="qty-display" id="detail-qty">${qty}</span>
@@ -225,14 +258,15 @@ export function productDetailView(p, categories, stores, qty = 1) {
           <div class="detail-actions">
             <button class="btn btn-primary" type="button" data-action="add-cart" data-id="${p.id}" ${out ? "disabled" : ""}>В корзину</button>
             <button class="btn btn-ghost" type="button" data-action="toggle-fav" data-id="${p.id}">${fav ? "Убрать из избранного" : "В избранное"}</button>
-          </div>
+          </div>`
+          }
         </div>
       </div>
     </div>
   `;
 }
 
-export function favoritesView(products, categories) {
+export function favoritesView(products, categories, stores = []) {
   return `
     <div class="page">
       <div class="favorites-header">
@@ -241,7 +275,7 @@ export function favoritesView(products, categories) {
       </div>
       ${
         products.length
-          ? `<div class="products-grid">${products.map((p) => productCard(p, categories)).join("")}</div>`
+          ? `<div class="products-grid">${products.map((p) => productCard(p, categories, stores)).join("")}</div>`
           : `<div class="empty-state"><div class="empty-state-icon">♡</div><div class="empty-state-title">Пока пусто</div><div class="empty-state-sub">Нажмите сердечко на карточке товара, чтобы сохранить его здесь.</div></div>`
       }
     </div>

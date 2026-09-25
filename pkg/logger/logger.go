@@ -11,6 +11,10 @@ type Logger struct {
 	*zap.Logger
 }
 
+func (l *Logger) Infof(s string, userRole string, authID int64) {
+	panic("unimplemented")
+}
+
 func New(devMode bool) (*Logger, error) {
 	var cfg zap.Config
 	if devMode {

@@ -13,11 +13,15 @@ import {
   cartCount,
   clearCart,
   getCart,
+  setCart,
   getFavorites,
   needsRole,
   setNeedRole,
   toggleFavorite,
   updateCartQty,
+  getCurrentUserStore,
+  setCurrentUserStore,
+  isOwnProduct,
 } from "./state.js";
 import { toast } from "./ui.js";
 import {
@@ -63,11 +67,23 @@ function isAuthed() {
 }
 
 async function loadCatalogData() {
-  const [products, categories, stores] = await Promise.all([
+  const user = currentUser();
+  const promises = [
     cache.products ? Promise.resolve(cache.products) : CatalogAPI.products(),
     cache.categories ? Promise.resolve(cache.categories) : CatalogAPI.categories(),
     cache.stores ? Promise.resolve(cache.stores) : CatalogAPI.stores(),
-  ]);
+  ];
+  if (user && (user.role === "seller" || user.role === "admin")) {
+    promises.push(
+      CatalogAPI.storeBySeller(user.id)
+        .then((s) => {
+          if (s) setCurrentUserStore(s);
+          return s;
+        })
+        .catch(() => null)
+    );
+  }
+  const [products, categories, stores] = await Promise.all(promises);
   cache.products = products || [];
   cache.categories = categories || [];
   cache.stores = stores || [];
@@ -90,6 +106,8 @@ function applyFilters(products) {
 }
 
 function paintCart() {
+  const user = currentUser();
+  if (!user) return;
   const drawer = document.getElementById("cart-drawer");
   if (drawer) drawer.innerHTML = cartDrawerView(getCart());
   const badge = document.getElementById("cart-badge");
@@ -133,6 +151,11 @@ async function render() {
     return;
   }
 
+  if ((path === "/" || path === "") && (user.role === "seller" || user.role === "admin")) {
+    go("#/seller");
+    return;
+  }
+
   try {
     if (parts[0] === "product" && parts[1]) {
       mountShell(loadingView());
@@ -148,7 +171,7 @@ async function render() {
       const data = await loadCatalogData();
       const ids = getFavorites();
       const products = data.products.filter((p) => ids.includes(p.id));
-      mountShell(favoritesView(products, data.categories));
+      mountShell(favoritesView(products, data.categories, data.stores));
     } else if (path === "/orders") {
       mountShell(loadingView());
       const orders = await OrderAPI.mine();
@@ -178,6 +201,7 @@ async function renderSeller(parts) {
   let store = null;
   try {
     store = await CatalogAPI.storeBySeller(user.id);
+    if (store) setCurrentUserStore(store);
   } catch (err) {
     if (err.status === 404) {
       mountShell(sellerStoreSetup());
@@ -359,22 +383,35 @@ async function onClick(e) {
     return;
   }
   if (action === "add-cart") {
+    const user = currentUser();
+    if (!user) {
+      toast("Войдите в аккаунт, чтобы добавить товар в корзину", "info");
+      go("#/login");
+      return;
+    }
     const id = Number(t.dataset.id);
-    const product = (cache.products || []).find((p) => p.id === id);
-    const qty = document.getElementById("detail-qty") ? detailQty : 1;
+    let product = (cache.products || []).find((p) => p.id === id);
     if (!product) {
       try {
-        const p = await CatalogAPI.product(id);
-        addToCart(p, qty);
+        product = await CatalogAPI.product(id);
       } catch (err) {
         toast(err.message, "error");
         return;
       }
-    } else {
-      addToCart(product, qty);
     }
-    paintCart();
-    toast("Добавлено в корзину", "success");
+    const stores = cache.stores || [];
+    if (isOwnProduct(product, stores)) {
+      toast("Вы не можете добавить в корзину товар собственного магазина", "error");
+      return;
+    }
+    const qty = document.getElementById("detail-qty") ? detailQty : 1;
+    try {
+      addToCart(product, qty, stores);
+      paintCart();
+      toast("Добавлено в корзину", "success");
+    } catch (err) {
+      toast(err.message, "error");
+    }
     return;
   }
   if (action === "qty") {
@@ -387,6 +424,12 @@ async function onClick(e) {
     return;
   }
   if (action === "open-cart") {
+    const user = currentUser();
+    if (!user) {
+      toast("Войдите в аккаунт для просмотра корзины", "info");
+      go("#/login");
+      return;
+    }
     cartOpen = true;
     document.querySelector(".cart-overlay")?.classList.add("open");
     document.getElementById("cart-drawer")?.classList.add("open");
@@ -413,6 +456,12 @@ async function onClick(e) {
     return;
   }
   if (action === "checkout") {
+    const user = currentUser();
+    if (!user) {
+      toast("Войдите в аккаунт для оформления заказа", "error");
+      go("#/login");
+      return;
+    }
     await checkout();
   }
 }
@@ -420,8 +469,21 @@ async function onClick(e) {
 async function checkout() {
   const cart = getCart();
   if (!cart.length) return;
+
+  const stores = cache.stores || [];
+  const myStore = getCurrentUserStore(stores);
+  const ownItems = cart.filter((i) => myStore && Number(i.store_id) === Number(myStore.id));
+  if (ownItems.length > 0) {
+    toast("В корзине обнаружены товары вашего магазина. Они исключены из заказа.", "error");
+    const sanitized = cart.filter((i) => !myStore || Number(i.store_id) !== Number(myStore.id));
+    setCart(sanitized);
+    paintCart();
+    if (!sanitized.length) return;
+  }
+
+  const currentCart = getCart();
   const byStore = new Map();
-  for (const item of cart) {
+  for (const item of currentCart) {
     const list = byStore.get(item.store_id) || [];
     list.push({ product_id: item.product_id, quantity: item.quantity });
     byStore.set(item.store_id, list);
@@ -433,7 +495,7 @@ async function checkout() {
     clearCart();
     cartOpen = false;
     cache.products = null;
-    toast("Заказ оформлен", "success");
+    toast("Заказ успешно оформлен", "success");
     go("#/orders");
   } catch (err) {
     toast(err.message, "error");

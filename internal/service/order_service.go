@@ -27,7 +27,6 @@ func NewOrderService(
 	}
 }
 func (s *OrderService) Create(ctx context.Context, customerID int64, items []models.OrderItem) (*models.Order, error) {
-	fmt.Printf("===> [DEBUG] Received customerID: %d\n", customerID)
 	if customerID <= 0 {
 		return nil, pkgerr.ErrAccessDenied
 	}
@@ -65,7 +64,6 @@ func (s *OrderService) Create(ctx context.Context, customerID int64, items []mod
 			s.rollbackStock(rollbackCtx, deducted)
 			return nil, fmt.Errorf("failed to fetch product %d: %w", pid, err)
 		}
-		fmt.Printf("===> [DEBUG] Product ID: %d, Product StoreID: %d\n", pid, product.StoreID)
 		if product == nil {
 			s.rollbackStock(rollbackCtx, deducted)
 			return nil, fmt.Errorf("%w: product %d not found", pkgerr.ErrProductNotFound, pid)
