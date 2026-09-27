@@ -47,6 +47,27 @@ const cache = {
   stores: null,
 };
 
+
+async function init() {
+  const user = currentUser();
+  
+  // If a logged-in user exists, populate store metadata before initial render
+  if (user && (user.role === "seller" || user.role === "admin")) {
+    try {
+      const store = await CatalogAPI.storeBySeller(user.id);
+      if (store) setCurrentUserStore(store);
+    } catch {
+      // Ignore initial profile/store fetch error; render handles fallbacks
+    }
+  }
+
+  // Attach hashchange listener and perform initial render after state resolution
+  window.addEventListener("hashchange", render);
+  await render();
+}
+
+init();
+
 let cartOpen = false;
 let detailQty = 1;
 let filters = { category: "", store: "", sort: "new", q: "" };
@@ -266,7 +287,7 @@ async function onAuth(e) {
     const tokens = await AuthAPI.login(email, password);
     saveTokens(tokens.access_token, tokens.refresh_token);
     setNeedRole(false);
-    toast("Добро пожаловать в Kinetiq", "success");
+    toast("Добро пожаловать в L'Aura", "success");
     go("#/catalog");
   } catch (err) {
     errorEl.textContent = err.message;

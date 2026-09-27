@@ -1,6 +1,7 @@
 import { currentUser } from "./api.js";
 
-const KEY_NEED_ROLE = "kinetiq.need_role";
+const KEY_NEED_ROLE = "laura.need_role";
+const LEGACY_NEED_ROLE = "kinetiq.need_role";
 
 function uid() {
   const user = currentUser();
@@ -21,20 +22,26 @@ function write(key, value) {
 }
 
 export function setNeedRole(value) {
-  if (value) sessionStorage.setItem(KEY_NEED_ROLE, "1");
-  else sessionStorage.removeItem(KEY_NEED_ROLE);
+  if (value) {
+    sessionStorage.setItem(KEY_NEED_ROLE, "1");
+  } else {
+    sessionStorage.removeItem(KEY_NEED_ROLE);
+    sessionStorage.removeItem(LEGACY_NEED_ROLE);
+  }
 }
 
 export function needsRole() {
-  return sessionStorage.getItem(KEY_NEED_ROLE) === "1";
+  return sessionStorage.getItem(KEY_NEED_ROLE) === "1" || sessionStorage.getItem(LEGACY_NEED_ROLE) === "1";
 }
 
 export function getCart() {
+  const current = read(`laura.cart.${uid()}`, null);
+  if (current !== null) return current;
   return read(`kinetiq.cart.${uid()}`, []);
 }
 
 export function setCart(items) {
-  write(`kinetiq.cart.${uid()}`, items);
+  write(`laura.cart.${uid()}`, items);
 }
 
 let cachedUserStore = null;
@@ -123,6 +130,8 @@ export function cartTotal() {
 }
 
 export function getFavorites() {
+  const current = read(`laura.fav.${uid()}`, null);
+  if (current !== null) return current;
   return read(`kinetiq.fav.${uid()}`, []);
 }
 
@@ -135,6 +144,6 @@ export function toggleFavorite(productId) {
   const idx = favs.indexOf(productId);
   if (idx >= 0) favs.splice(idx, 1);
   else favs.push(productId);
-  write(`kinetiq.fav.${uid()}`, favs);
+  write(`laura.fav.${uid()}`, favs);
   return favs;
 }

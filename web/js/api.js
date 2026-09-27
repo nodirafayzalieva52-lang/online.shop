@@ -1,22 +1,32 @@
-const TOKEN_ACCESS = "kinetiq.access";
-const TOKEN_REFRESH = "kinetiq.refresh";
+const TOKEN_ACCESS = "laura.access";
+const TOKEN_REFRESH = "laura.refresh";
+const LEGACY_ACCESS = "kinetiq.access";
+const LEGACY_REFRESH = "kinetiq.refresh";
 
 export function getAccessToken() {
-  return localStorage.getItem(TOKEN_ACCESS) || "";
+  return localStorage.getItem(TOKEN_ACCESS) || localStorage.getItem(LEGACY_ACCESS) || "";
 }
 
 export function getRefreshToken() {
-  return localStorage.getItem(TOKEN_REFRESH) || "";
+  return localStorage.getItem(TOKEN_REFRESH) || localStorage.getItem(LEGACY_REFRESH) || "";
 }
 
 export function saveTokens(access, refresh) {
-  if (access) localStorage.setItem(TOKEN_ACCESS, access);
-  if (refresh) localStorage.setItem(TOKEN_REFRESH, refresh);
+  if (access) {
+    localStorage.setItem(TOKEN_ACCESS, access);
+    localStorage.removeItem(LEGACY_ACCESS);
+  }
+  if (refresh) {
+    localStorage.setItem(TOKEN_REFRESH, refresh);
+    localStorage.removeItem(LEGACY_REFRESH);
+  }
 }
 
 export function clearTokens() {
   localStorage.removeItem(TOKEN_ACCESS);
   localStorage.removeItem(TOKEN_REFRESH);
+  localStorage.removeItem(LEGACY_ACCESS);
+  localStorage.removeItem(LEGACY_REFRESH);
 }
 
 function decodeJwt(token) {

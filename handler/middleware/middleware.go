@@ -107,6 +107,7 @@ func AuthMiddleware(jwtService *jwt.Service) func(http.Handler) http.Handler {
 	}
 }
 
+// RequireRole checks if the authenticated user has one of the allowed roles.
 func RequireRole(allowedRoles ...models.Role) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -117,10 +118,10 @@ func RequireRole(allowedRoles ...models.Role) func(http.Handler) http.Handler {
 			}
 
 			userRole := models.Role(userRoleStr)
+
+			// Clean strict check: no auto-bridging between customer/client or seller roles
 			for _, allowed := range allowedRoles {
-				if userRole == allowed ||
-					(userRole == models.RoleCustomer && allowed == models.RoleClient) ||
-					(userRole == models.RoleClient && allowed == models.RoleCustomer) {
+				if userRole == allowed {
 					next.ServeHTTP(w, r)
 					return
 				}

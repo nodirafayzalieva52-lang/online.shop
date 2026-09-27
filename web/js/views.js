@@ -16,8 +16,8 @@ export function authView(tab = "login") {
   return `
     <div class="auth-shell">
       <div class="auth-left">
-        <div class="auth-brand">KINETIQ<span>.SHOP</span></div>
-        <p class="auth-tagline">Кибермаркет будущего. Плотная витрина, мгновенный заказ, контроль продавца.</p>
+        <div class="auth-brand">L'AURA<span>.</span></div>
+        <p class="auth-tagline">Галерея архитектурного освещения, дизайнерской сантехники и концептуального декора.</p>
       </div>
       <div class="auth-right">
         <div class="auth-tabs">
@@ -27,37 +27,44 @@ export function authView(tab = "login") {
         <form class="auth-form" id="auth-form" data-mode="${isLogin ? "login" : "register"}">
           <div class="form-group">
             <label class="form-label">Email</label>
-            <input class="form-input" type="email" name="email" placeholder="you@kinetiq.shop" required />
+            <input class="form-input" type="email" name="email" placeholder="client@laura.boutique" required />
           </div>
           <div class="form-group">
             <label class="form-label">Пароль</label>
             <input class="form-input" type="password" name="password" placeholder="минимум 6 символов" minlength="6" required />
           </div>
           <p class="form-error hidden" id="auth-error"></p>
-          <button class="btn btn-primary btn-full" type="submit">${isLogin ? "Войти в сеть" : "Создать аккаунт"}</button>
-          <p class="form-note">${isLogin ? "Нет аккаунта — переключитесь на регистрацию." : "После регистрации выберите роль: покупатель или продавец."}</p>
+          <button class="btn btn-primary btn-full" type="submit">${isLogin ? "Войти в галерею" : "Создать аккаунт"}</button>
+          <p class="form-note">${isLogin ? "Нет аккаунта — переключитесь на регистрацию." : "После регистрации выберите статус: покупатель коллекций или бутик/мастерская."}</p>
         </form>
       </div>
     </div>
   `;
 }
 
+function isSellerOrAdmin() {
+  const user = currentUser();
+  if (!user) return false;
+  const role = String(user.role || "").toLowerCase();
+  return role === "seller" || role === "admin";
+}
+
 export function roleView() {
   return `
     <div class="role-shell">
-      <div class="auth-brand" style="font-size:2rem;margin-bottom:24px">KINETIQ<span>.SHOP</span></div>
-      <h1 class="role-title">Кто вы в Kinetiq?</h1>
-      <p class="role-sub">Роль можно выбрать один раз. Продавец не сможет стать покупателем.</p>
+      <div class="auth-brand" style="font-size:2.2rem;margin-bottom:24px">L'AURA<span>.</span></div>
+      <h1 class="role-title">Выберите ваш статус в L'Aura</h1>
+      <p class="role-sub">Статус определяет формат работы в галерее и выбирается один раз.</p>
       <div class="role-cards">
         <div class="role-card buyer" data-action="pick-role" data-role="customer">
-          <span class="role-icon">◈</span>
+          <span class="role-icon">✧</span>
           <h3>Покупатель</h3>
-          <p>Каталог, избранное, корзина и оформление заказов в магазинах площадки.</p>
+          <p>Каталог авторских предметов интерьера, избранное, персональная корзина и оформление заказов.</p>
         </div>
         <div class="role-card seller" data-action="pick-role" data-role="seller">
-          <span class="role-icon">⬡</span>
-          <h3>Продавец</h3>
-          <p>Свой магазин, витрина товаров, остатки и входящие заказы.</p>
+          <span class="role-icon">✦</span>
+          <h3>Бутик / Мастер</h3>
+          <p>Собственный бутик, экспозиция дизайнерского освещения, сантехники и декора, учёт остатков и заказы.</p>
         </div>
       </div>
     </div>
@@ -66,31 +73,31 @@ export function roleView() {
 
 export function shell(inner, { cartOpen = false } = {}) {
   const user = currentUser();
-  const seller = user && (user.role === "seller" || user.role === "admin");
+  const seller = isSellerOrAdmin();
+
   return `
     <div class="app-shell">
       <header class="navbar">
-        <div class="navbar-logo" data-action="nav" data-route="#/catalog">KINETIQ<span>.SHOP</span></div>
+        <div class="navbar-logo" data-action="nav" data-route="#/catalog">L'AURA<span>.</span></div>
         <nav class="navbar-nav">
-          <a class="nav-link" data-action="nav" data-route="#/catalog">Каталог</a>
+          <a class="nav-link" data-action="nav" data-route="#/catalog">Коллекции</a>
           <a class="nav-link" data-action="nav" data-route="#/favorites">Избранное</a>
           <a class="nav-link" data-action="nav" data-route="#/orders">Заказы</a>
-          ${seller ? `<a class="nav-link" data-action="nav" data-route="#/seller">Кабинет</a>` : ""}
+          ${seller ? `<a class="nav-link" data-action="nav" data-route="#/seller">Ателье</a>` : ""}
         </nav>
         <div class="navbar-spacer"></div>
         <div class="navbar-actions">
           <div class="navbar-search">
-            <input id="global-search" type="search" placeholder="Поиск по витрине..." />
+            <input id="global-search" type="search" placeholder="Поиск в коллекциях..." />
             <span class="search-icon">⌕</span>
           </div>
-          ${
-            user
-              ? `<button class="icon-btn" data-action="open-cart" title="Корзина" type="button">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6h15l-1.5 9h-12z"/><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M6 6L5 3H2"/></svg>
+          ${!seller
+      ? `<button class="icon-btn" data-action="open-cart" title="Корзина" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6h15l-1.5 9h-12z"/><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M6 6L5 3H2"/></svg>
             <span class="badge" id="cart-badge">${cartCount()}</span>
           </button>`
-              : ""
-          }
+      : ""
+    }
           <button class="avatar-btn" data-action="logout" type="button" title="Выйти">
             <span class="avatar-circle">${escapeHtml(initials(user?.email))}</span>
             <span class="user-email">${escapeHtml(user?.email || "")}</span>
@@ -99,16 +106,16 @@ export function shell(inner, { cartOpen = false } = {}) {
       </header>
       <main id="app">${inner}</main>
     </div>
-    ${
-      user
-        ? `<div class="cart-overlay ${cartOpen ? "open" : ""}" data-action="close-cart"></div>
+    ${!seller
+      ? `<div class="cart-overlay ${cartOpen ? "open" : ""}" data-action="close-cart"></div>
     <aside class="cart-drawer ${cartOpen ? "open" : ""}" id="cart-drawer"></aside>`
-        : ""
+      : ""
     }
   `;
 }
 
 export function productCard(p, categories, stores = []) {
+  const seller = isSellerOrAdmin();
   const fav = isFavorite(p.id);
   const out = !p.stock;
   const isOwn = isOwnProduct(p, stores);
@@ -116,25 +123,25 @@ export function productCard(p, categories, stores = []) {
   return `
     <article class="product-card ${isOwn ? "product-card-own" : ""}" data-action="open-product" data-id="${p.id}">
       <div class="product-img-wrap">
-        ${p.image_url ? `<img class="product-img" src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" />` : `<div class="product-img-placeholder">◆</div>`}
+        ${p.image_url ? `<img class="product-img" src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" />` : `<div class="product-img-placeholder">✧</div>`}
         <div class="product-img-overlay"></div>
         <button class="fav-btn ${fav ? "active" : ""}" type="button" data-action="toggle-fav" data-id="${p.id}" title="В избранное">${fav ? "♥" : "♡"}</button>
-        ${
-          isOwn
-            ? `<span class="stock-badge own-badge">Ваш товар</span>`
-            : `<span class="stock-badge ${out ? "out-stock" : "in-stock"}">${out ? "Нет в наличии" : "В наличии"}</span>`
-        }
+        ${isOwn
+      ? `<span class="stock-badge own-badge">Ваш предмет</span>`
+      : `<span class="stock-badge ${out ? "out-stock" : "in-stock"}">${out ? "Нет в наличии" : "В наличии"}</span>`
+    }
       </div>
       <div class="product-body">
         <span class="product-cat-tag">${escapeHtml(categoryName(categories, p.category_id))}</span>
         <div class="product-name">${escapeHtml(p.name)}</div>
         <div class="product-price">${formatPrice(p.price)}</div>
         <div class="product-actions">
-          ${
-            isOwn
-              ? `<button class="btn btn-ghost btn-sm btn-full" type="button" data-action="nav" data-route="#/seller/product/${p.id}">Управление</button>`
-              : `<button class="add-cart-btn" type="button" data-action="add-cart" data-id="${p.id}" ${out ? "disabled" : ""}>В корзину</button>`
-          }
+          ${isOwn
+      ? `<button class="btn btn-ghost btn-sm btn-full" type="button" data-action="nav" data-route="#/seller/product/${p.id}">Управление</button>`
+      : seller
+        ? ``
+        : `<button class="add-cart-btn" type="button" data-action="add-cart" data-id="${p.id}" ${out ? "disabled" : ""}>В корзину</button>`
+    }
         </div>
       </div>
     </article>
@@ -154,7 +161,7 @@ export function catalogView({ products, categories, stores, filters }) {
     )
     .join("");
 
-  const storeItems = [`<div class="cat-item ${!filters.store ? "active" : ""}" data-action="filter-store" data-id="">Все магазины</div>`]
+  const storeItems = [`<div class="cat-item ${!filters.store ? "active" : ""}" data-action="filter-store" data-id="">Все бутики</div>`]
     .concat(
       (stores || []).map(
         (s) =>
@@ -165,14 +172,14 @@ export function catalogView({ products, categories, stores, filters }) {
 
   const grid =
     products.length === 0
-      ? `<div class="empty-state"><div class="empty-state-icon">◇</div><div class="empty-state-title">Витрина пуста</div><div class="empty-state-sub">Измените фильтры или подождите появления товаров.</div></div>`
+      ? `<div class="empty-state"><div class="empty-state-icon">✧</div><div class="empty-state-title">Экспозиция пуста</div><div class="empty-state-sub">Измените фильтры или ожидайте появления новых дизайнерских предметов.</div></div>`
       : `<div class="products-grid">${products.map((p) => productCard(p, categories, stores)).join("")}</div>`;
 
   return `
     <div class="page-wide">
       <section class="hero-banner">
-        <h1 class="hero-title">Рынок <em>Kinetiq</em></h1>
-        <p class="hero-sub">Киберпанк-витрина в духе маркетплейса: плотная сетка, быстрые фильтры, избранное и корзина.</p>
+        <h1 class="hero-title">Магазин <em>L'Aura</em></h1>
+        <p class="hero-sub">Архитектурный свет, дизайнерская сантехника и концептуальный декор. Безупречная геометрия форм, благородство металлов и утончённая игра света.</p>
       </section>
       <div class="catalog-layout">
         <aside class="catalog-sidebar">
@@ -181,15 +188,15 @@ export function catalogView({ products, categories, stores, filters }) {
             <div class="cat-list">${catItems}</div>
           </div>
           <div class="sidebar-card">
-            <div class="sidebar-title">Магазины</div>
+            <div class="sidebar-title">Бутики & Бренды</div>
             <div class="cat-list">${storeItems}</div>
           </div>
         </aside>
         <section class="catalog-main">
           <div class="catalog-header">
             <div>
-              <h2 class="catalog-title">Каталог</h2>
-              <div class="catalog-meta">${products.length} товаров</div>
+              <h2 class="catalog-title">Коллекции</h2>
+              <div class="catalog-meta">${products.length} предметов интерьера</div>
             </div>
             <select class="sort-select" id="sort-select">
               <option value="new" ${filters.sort === "new" ? "selected" : ""}>Сначала новые</option>
@@ -206,6 +213,8 @@ export function catalogView({ products, categories, stores, filters }) {
 }
 
 export function productDetailView(p, categories, stores, qty = 1) {
+  const user = currentUser();
+  const seller = user && (user.role === "seller" || user.role === "admin");
   const fav = isFavorite(p.id);
   const out = !p.stock;
   const isOwn = isOwnProduct(p, stores);
@@ -213,43 +222,47 @@ export function productDetailView(p, categories, stores, qty = 1) {
   return `
     <div class="page">
       <div class="breadcrumb">
-        <a data-action="nav" data-route="#/catalog">Каталог</a>
+        <a data-action="nav" data-route="#/catalog">Коллекции</a>
         <span class="breadcrumb-sep">/</span>
         <span class="breadcrumb-current">${escapeHtml(p.name)}</span>
       </div>
       <div class="product-detail ${isOwn ? "product-detail-own" : ""}">
         <div class="product-detail-img" style="position:relative">
-          ${p.image_url ? `<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" />` : "◆"}
+          ${p.image_url ? `<img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" />` : "✧"}
           <button class="fav-btn ${fav ? "active" : ""}" type="button" data-action="toggle-fav" data-id="${p.id}" style="top:16px;right:16px">${fav ? "♥" : "♡"}</button>
-          ${isOwn ? `<div class="own-detail-pill">★ Товар вашего магазина</div>` : ""}
+          ${isOwn ? `<div class="own-detail-pill">★ Предмет вашего бутика</div>` : ""}
         </div>
         <div class="product-detail-info">
           <span class="product-cat-tag product-detail-category">${escapeHtml(categoryName(categories, p.category_id))}</span>
           <h1 class="product-detail-name">${escapeHtml(p.name)}</h1>
           <div class="product-detail-price">${formatPrice(p.price)}</div>
-          <p class="product-detail-desc">${escapeHtml(p.description || "Описание появится позже.")}</p>
+          <p class="product-detail-desc">${escapeHtml(p.description || "Описание предмета будет дополнено в ближайшее время.")}</p>
           <div class="product-detail-meta">
             <div class="meta-item">
-              <div class="meta-label">Магазин</div>
+              <div class="meta-label">Бутик / Бренд</div>
               <div class="meta-value">${escapeHtml(storeName(stores, p.store_id))}</div>
             </div>
             <div class="meta-item">
-              <div class="meta-label">Остаток</div>
+              <div class="meta-label">Доступно</div>
               <div class="meta-value">${p.stock} шт.</div>
             </div>
           </div>
-          ${
-            isOwn
-              ? `
+          ${isOwn
+      ? `
           <div class="own-product-notice">
-            <div class="own-notice-title">Товар вашего магазина</div>
-            <div class="own-notice-text">Вы являетесь продавцом этого товара. Покупка собственных товаров в маркетплейсе отключена.</div>
+            <div class="own-notice-title">Предмет вашего бутика</div>
+            <div class="own-notice-text">Вы являетесь продавцом или автором этого предмета. Покупка собственных позиций в галерее отключена.</div>
             <div class="detail-actions mt-16">
-              <button class="btn btn-violet" type="button" data-action="nav" data-route="#/seller/product/${p.id}">Редактировать товар</button>
+              <button class="btn btn-violet" type="button" data-action="nav" data-route="#/seller/product/${p.id}">Редактировать предмет</button>
               <button class="btn btn-ghost" type="button" data-action="toggle-fav" data-id="${p.id}">${fav ? "Убрать из избранного" : "В избранное"}</button>
             </div>
           </div>`
-              : `
+      : seller
+        ? `
+          <div class="detail-actions mt-16">
+            <button class="btn btn-ghost" type="button" data-action="toggle-fav" data-id="${p.id}">${fav ? "Убрать из избранного" : "В избранное"}</button>
+          </div>`
+        : `
           <div class="qty-control">
             <button class="qty-btn" type="button" data-action="qty" data-delta="-1">−</button>
             <span class="qty-display" id="detail-qty">${qty}</span>
@@ -259,7 +272,7 @@ export function productDetailView(p, categories, stores, qty = 1) {
             <button class="btn btn-primary" type="button" data-action="add-cart" data-id="${p.id}" ${out ? "disabled" : ""}>В корзину</button>
             <button class="btn btn-ghost" type="button" data-action="toggle-fav" data-id="${p.id}">${fav ? "Убрать из избранного" : "В избранное"}</button>
           </div>`
-          }
+    }
         </div>
       </div>
     </div>
@@ -273,11 +286,10 @@ export function favoritesView(products, categories, stores = []) {
         <h1 class="favorites-title">Избранное</h1>
         <span class="fav-count">${products.length}</span>
       </div>
-      ${
-        products.length
-          ? `<div class="products-grid">${products.map((p) => productCard(p, categories, stores)).join("")}</div>`
-          : `<div class="empty-state"><div class="empty-state-icon">♡</div><div class="empty-state-title">Пока пусто</div><div class="empty-state-sub">Нажмите сердечко на карточке товара, чтобы сохранить его здесь.</div></div>`
-      }
+      ${products.length
+      ? `<div class="products-grid">${products.map((p) => productCard(p, categories, stores)).join("")}</div>`
+      : `<div class="empty-state"><div class="empty-state-icon">♡</div><div class="empty-state-title">В избранном пока пусто</div><div class="empty-state-sub">Нажмите символ сердца на карточке предмета, чтобы сохранить его в личной коллекции.</div></div>`
+    }
     </div>
   `;
 }
@@ -287,7 +299,7 @@ export function ordersView(orders) {
     return `
       <div class="page">
         <h1 class="catalog-title mb-24">Мои заказы</h1>
-        <div class="empty-state"><div class="empty-state-icon">▤</div><div class="empty-state-title">Заказов нет</div><div class="empty-state-sub">Соберите корзину и оформите первый заказ.</div></div>
+        <div class="empty-state"><div class="empty-state-icon">✧</div><div class="empty-state-title">У вас пока нет заказов</div><div class="empty-state-sub">Сформируйте корзину из понравившихся предметов и оформите первый заказ.</div></div>
       </div>`;
   }
   const cards = orders
@@ -296,7 +308,7 @@ export function ordersView(orders) {
         .map(
           (it) => `
           <div class="order-item-row">
-            <span class="order-item-name">${escapeHtml(it.product?.name || "Товар #" + it.product_id)}</span>
+            <span class="order-item-name">${escapeHtml(it.product?.name || "Предмет #" + it.product_id)}</span>
             <span class="order-item-qty">× ${it.quantity}</span>
             <span class="order-item-price">${formatPrice(it.price * it.quantity)}</span>
           </div>`
@@ -326,14 +338,14 @@ export function cartDrawerView(items) {
   if (!items.length) {
     return `
       <div class="cart-header"><h3>Корзина</h3><button class="cart-close" type="button" data-action="close-cart">✕</button></div>
-      <div class="cart-empty"><div class="cart-empty-icon">◇</div><div>Корзина пуста</div></div>
+      <div class="cart-empty"><div class="cart-empty-icon">✧</div><div>Корзина пуста</div></div>
     `;
   }
   const rows = items
     .map(
       (i) => `
       <div class="cart-item">
-        <div class="cart-item-img">${i.image_url ? `<img src="${escapeHtml(i.image_url)}" alt="" />` : "◆"}</div>
+        <div class="cart-item-img">${i.image_url ? `<img src="${escapeHtml(i.image_url)}" alt="" />` : "✧"}</div>
         <div class="cart-item-info">
           <div class="cart-item-name">${escapeHtml(i.name)}</div>
           <div class="cart-item-price">${formatPrice(i.price)}</div>
@@ -356,7 +368,7 @@ export function cartDrawerView(items) {
         <span class="cart-total-label">К оплате</span>
         <span class="cart-total-value">${formatPrice(total)}</span>
       </div>
-      <p class="form-note mb-16">Заказ с товарами из разных магазинов будет разбит автоматически.</p>
+      <p class="form-note mb-16">Предметы из разных бутиков оформляются с индивидуальной доставкой.</p>
       <button class="btn btn-primary btn-full" type="button" data-action="checkout">Оформить заказ</button>
     </div>
   `;
@@ -366,20 +378,20 @@ export function sellerStoreSetup() {
   return `
     <div class="page">
       <div class="store-setup-wrap">
-        <div class="store-setup-icon">⬡</div>
-        <h1 class="store-setup-title">Создайте свой магазин</h1>
-        <p class="store-setup-sub">У продавца один магазин. После создания вы сможете выставлять товары.</p>
+        <div class="store-setup-icon">✦</div>
+        <h1 class="store-setup-title">Создайте свой бутик в L'Aura</h1>
+        <p class="store-setup-sub">У каждого бренда один бутик. После регистрации профиля вы сможете размещать свои коллекции.</p>
         <form class="form-card store-form-card" id="store-form">
           <div class="form-group mb-16">
-            <label class="form-label">Название</label>
-            <input class="form-input" name="name" required placeholder="Neon Forge" />
+            <label class="form-label">Название бутика / студии</label>
+            <input class="form-input" name="name" required placeholder="Lumina Atelier" />
           </div>
           <div class="form-group mb-16">
-            <label class="form-label">Описание</label>
-            <textarea class="form-input" name="description" placeholder="Чем торгуете"></textarea>
+            <label class="form-label">Концепция и описание</label>
+            <textarea class="form-input" name="description" placeholder="Архитектурный свет из латуни, дизайнерская сантехника, концептуальный декор..."></textarea>
           </div>
           <p class="form-error hidden" id="store-error"></p>
-          <button class="btn btn-violet btn-full" type="submit">Открыть магазин</button>
+          <button class="btn btn-violet btn-full" type="submit">Открыть бутик</button>
         </form>
       </div>
     </div>
@@ -430,29 +442,29 @@ export function sellerDashboard({ store, products, orders, categories }) {
       <div class="seller-header">
         <div>
           <h1 class="seller-title">${escapeHtml(store.name)}</h1>
-          <p class="seller-sub">${escapeHtml(store.description || "Панель продавца Kinetiq.Shop")}</p>
+          <p class="seller-sub">${escapeHtml(store.description || "Панель управления бутика L'Aura")}</p>
         </div>
-        <button class="btn btn-violet" type="button" data-action="nav" data-route="#/seller/product">+ Новый товар</button>
+        <button class="btn btn-violet" type="button" data-action="nav" data-route="#/seller/product">+ Добавить предмет</button>
       </div>
       <div class="stats-grid">
-        <div class="stat-card cyan"><div class="stat-label">Товары</div><div class="stat-value">${products.length}</div></div>
+        <div class="stat-card cyan"><div class="stat-label">Предметы</div><div class="stat-value">${products.length}</div></div>
         <div class="stat-card violet"><div class="stat-label">Заказы</div><div class="stat-value">${orders.length}</div></div>
         <div class="stat-card green"><div class="stat-label">Оборот</div><div class="stat-value" style="font-size:1.3rem">${formatPrice(revenue)}</div></div>
         <div class="stat-card orange"><div class="stat-label">Остаток SKU</div><div class="stat-value">${products.reduce((s, p) => s + (p.stock || 0), 0)}</div></div>
       </div>
       <div class="data-table-wrap mb-24">
         <div class="data-table-header">
-          <div class="data-table-title">Витрина магазина</div>
+          <div class="data-table-title">Экспозиция бутика</div>
         </div>
         <div style="overflow-x:auto">
           <table class="data-table">
-            <thead><tr><th>Наименование</th><th>Категория</th><th>Цена</th><th>Сток</th><th></th></tr></thead>
-            <tbody>${rows || `<tr><td colspan="5" class="text-muted">Товаров пока нет</td></tr>`}</tbody>
+            <thead><tr><th>Наименование</th><th>Категория</th><th>Цена</th><th>Остаток</th><th></th></tr></thead>
+            <tbody>${rows || `<tr><td colspan="5" class="text-muted">В экспозиции пока нет предметов</td></tr>`}</tbody>
           </table>
         </div>
       </div>
       <h2 class="data-table-title mb-16">Входящие заказы</h2>
-      <div class="orders-list">${orderCards || `<div class="empty-state"><div class="empty-state-title">Заказов нет</div></div>`}</div>
+      <div class="orders-list">${orderCards || `<div class="empty-state"><div class="empty-state-title">Заказов пока нет</div></div>`}</div>
     </div>
   `;
 }
@@ -465,28 +477,28 @@ export function productFormView({ product, categories, store }) {
   return `
     <div class="page">
       <div class="breadcrumb">
-        <a data-action="nav" data-route="#/seller">Кабинет</a>
+        <a data-action="nav" data-route="#/seller">Ателье</a>
         <span class="breadcrumb-sep">/</span>
-        <span class="breadcrumb-current">${p.id ? "Редактирование" : "Новый товар"}</span>
+        <span class="breadcrumb-current">${p.id ? "Редактирование" : "Новый предмет"}</span>
       </div>
       <form class="form-card" id="product-form" data-id="${p.id || ""}">
-        <h2 class="form-card-title">${p.id ? "Изменить товар" : "Добавить товар"}</h2>
-        <p class="text-sm text-muted mb-16">Магазин: <strong class="text-cyan">${escapeHtml(store.name)}</strong></p>
+        <h2 class="form-card-title">${p.id ? "Изменить предмет" : "Добавить предмет в коллекцию"}</h2>
+        <p class="text-sm text-muted mb-16">Бутик: <strong class="text-cyan">${escapeHtml(store.name)}</strong></p>
         <div class="form-grid">
           <div class="form-group form-col-span">
-            <label class="form-label">Наименование</label>
-            <input class="form-input" name="name" required value="${escapeHtml(p.name || "")}" />
+            <label class="form-label">Наименование предмета</label>
+            <input class="form-input" name="name" required value="${escapeHtml(p.name || "")}" placeholder="Например: Бра из черненой латуни L'Aura Noir" />
           </div>
           <div class="form-group form-col-span">
-            <label class="form-label">Описание</label>
-            <textarea class="form-input" name="description">${escapeHtml(p.description || "")}</textarea>
+            <label class="form-label">Описание и характеристики</label>
+            <textarea class="form-input" name="description" placeholder="Материалы, размеры, световая температура, отделка...">${escapeHtml(p.description || "")}</textarea>
           </div>
           <div class="form-group">
             <label class="form-label">Цена, ₽</label>
             <input class="form-input" name="price" type="number" min="0.01" step="0.01" required value="${p.price ?? ""}" />
           </div>
           <div class="form-group">
-            <label class="form-label">Остаток</label>
+            <label class="form-label">Остаток, шт.</label>
             <input class="form-input" name="stock" type="number" min="0" step="1" required value="${p.stock ?? 0}" />
           </div>
           <div class="form-group">

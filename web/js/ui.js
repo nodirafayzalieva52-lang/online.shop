@@ -50,14 +50,14 @@ export function categoryName(categories, id) {
 
 export function storeName(stores, id) {
   const s = (stores || []).find((x) => x.id === id);
-  return s ? s.name : `Магазин #${id}`;
+  return s ? s.name : `Бутик #${id}`;
 }
 
 export function imgTag(url, alt, cls) {
   if (url) {
-    return `<img class="${cls || ""}" src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'product-img-placeholder',textContent:'◆'}))" />`;
+    return `<img class="${cls || ""}" src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'product-img-placeholder',textContent:'✧'}))" />`;
   }
-  return `<div class="product-img-placeholder">◆</div>`;
+  return `<div class="product-img-placeholder">✧</div>`;
 }
 
 export function statusClass(status) {
