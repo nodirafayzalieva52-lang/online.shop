@@ -1,20 +1,20 @@
 package logger
-
+ 
 import (
 	"fmt"
-
+ 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
-
+ 
 type Logger struct {
 	*zap.Logger
 }
-
-func (l *Logger) Infof(s string, userRole string, authID int64) {
-	panic("unimplemented")
+ 
+func (l *Logger) Infof(format string, args ...interface{}) {
+	l.Logger.Info(fmt.Sprintf(format, args...))
 }
-
+ 
 func New(devMode bool) (*Logger, error) {
 	var cfg zap.Config
 	if devMode {
@@ -29,8 +29,9 @@ func New(devMode bool) (*Logger, error) {
 	if err != nil {
 		return nil, fmt.Errorf("mainLogger.Build: %w", err)
 	}
-
+ 
 	return &Logger{
 		mainLogger,
 	}, nil
 }
+ 

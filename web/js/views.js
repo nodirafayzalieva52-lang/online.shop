@@ -17,7 +17,7 @@ export function authView(tab = "login") {
     <div class="auth-shell">
       <div class="auth-left">
         <div class="auth-brand">L'AURA<span>.</span></div>
-        <p class="auth-tagline">Галерея архитектурного освещения, дизайнерской сантехники и концептуального декора.</p>
+        <p class="auth-tagline">Магазин архитектурного освещения, дизайнерской сантехники и концептуального декора.</p>
       </div>
       <div class="auth-right">
         <div class="auth-tabs">
@@ -54,7 +54,7 @@ export function roleView() {
     <div class="role-shell">
       <div class="auth-brand" style="font-size:2.2rem;margin-bottom:24px">L'AURA<span>.</span></div>
       <h1 class="role-title">Выберите ваш статус в L'Aura</h1>
-      <p class="role-sub">Статус определяет формат работы в галерее и выбирается один раз.</p>
+      <p class="role-sub">Статус определяет формат работы в магазине и выбирается один раз.</p>
       <div class="role-cards">
         <div class="role-card buyer" data-action="pick-role" data-role="customer">
           <span class="role-icon">✧</span>
